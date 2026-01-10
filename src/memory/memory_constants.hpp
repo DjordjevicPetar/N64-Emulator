@@ -1,0 +1,75 @@
+#pragma once
+
+#include "../../utils/types.hpp"
+
+namespace n64::memory {
+
+
+// RDRAM Memory Constants
+constexpr u32 RDRAM_START_ADDRESS = 0x00000000;
+constexpr u32 RDRAM_END_ADDRESS = 0x03FFFFFF;
+
+constexpr u32 RDRAM_MEMORY_START_ADDRESS = 0x00000000;
+constexpr u32 RDRAM_MEMORY_END_ADDRESS = 0x03EFFFFF;
+
+constexpr u32 RDRAM_REGISTER_START_ADDRESS = 0x03F00000;
+constexpr u32 RDRAM_REGISTER_END_ADDRESS = 0x03FFFFFF;
+
+constexpr u32 RDRAM_MEMORY_SIZE = 0x00800000; // 8MB
+
+// RSP Memory Constants
+constexpr u32 RSP_START_ADDRESS = 0x04000000;
+constexpr u32 RSP_END_ADDRESS = 0x040FFFFF;
+
+constexpr u32 RSP_DATA_MEMORY_START_ADDRESS = 0x04000000;
+constexpr u32 RSP_DATA_MEMORY_END_ADDRESS = 0x04000FFF;
+
+constexpr u32 RSP_INSTRUCTION_MEMORY_START_ADDRESS = 0x04001000;
+constexpr u32 RSP_INSTRUCTION_MEMORY_END_ADDRESS = 0x04001FFF;
+
+constexpr u32 RSP_REGISTER_START_ADDRESS = 0x04040000;
+constexpr u32 RSP_REGISTER_END_ADDRESS = 0x040BFFFF;
+
+// RDP Memory Constants
+constexpr u32 RDP_START_ADDRESS = 0x04100000;
+constexpr u32 RDP_END_ADDRESS = 0x042FFFFF;
+
+constexpr u32 RDP_COMMAND_REGISTER_START_ADDRESS = 0x04100000;
+constexpr u32 RDP_COMMAND_REGISTER_END_ADDRESS = 0x041FFFFF;
+
+constexpr u32 RDP_SPAN_REGISTER_START_ADDRESS = 0x04200000;
+constexpr u32 RDP_SPAN_REGISTER_END_ADDRESS = 0x042FFFFF;
+
+// MI Memory Constants
+constexpr u32 MI_START_ADDRESS = 0x04300000;
+constexpr u32 MI_END_ADDRESS = 0x043FFFFF;
+
+// VI Memory Constants
+constexpr u32 VI_START_ADDRESS = 0x04400000;
+constexpr u32 VI_END_ADDRESS = 0x044FFFFF;
+
+// AI Memory Constants
+constexpr u32 AI_START_ADDRESS = 0x04500000;
+constexpr u32 AI_END_ADDRESS = 0x045FFFFF;
+
+// PI Memory Constants
+constexpr u32 PI_START_ADDRESS = 0x04600000;
+constexpr u32 PI_END_ADDRESS = 0x046FFFFF;
+
+// RI Memory Constants
+constexpr u32 RI_START_ADDRESS = 0x04700000;
+constexpr u32 RI_END_ADDRESS = 0x047FFFFF;
+
+// SI Memory Constants
+constexpr u32 SI_START_ADDRESS = 0x04800000;
+constexpr u32 SI_END_ADDRESS = 0x048FFFFF;
+
+// I/O size
+enum class IO_SIZE {
+    IO_SIZE_BYTE = 1,
+    IO_SIZE_HALF_WORD = 2,
+    IO_SIZE_WORD = 4,
+    IO_SIZE_DOUBLE_WORD = 8,
+};
+
+}
