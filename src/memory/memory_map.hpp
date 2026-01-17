@@ -31,11 +31,11 @@ public:
 private:
     RDRAM rdram_;
     ROM rom_;
-    // interfaces::AI ai_;
     interfaces::MI mi_;
-    // interfaces::VI vi_;
-    // interfaces::SI si_;
-    // interfaces::RI ri_;
+    interfaces::AI ai_;
+    interfaces::VI vi_;
+    interfaces::SI si_;
+    interfaces::RI ri_;
     interfaces::PI pi_;
     PIF pif_;
 };

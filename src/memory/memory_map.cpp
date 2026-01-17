@@ -8,6 +8,10 @@ MemoryMap::MemoryMap(const std::string& rom_path)
     : rdram_()
     , rom_(pi_, rom_path)
     , mi_()
+    , ai_(mi_)
+    , vi_(mi_)
+    , si_(mi_)
+    , ri_()
     , pi_()
     , pif_()
 {
@@ -51,10 +55,30 @@ T MemoryMap::read(u32 address)
     if (address >= MI_START_ADDRESS && address <= MI_END_ADDRESS) {
         return mi_.read_register(address);
     }
+
+    // VI
+    if (address >= VI_START_ADDRESS && address <= VI_END_ADDRESS) {
+        return vi_.read_register(address);
+    }
+
+    // AI
+    if (address >= AI_START_ADDRESS && address <= AI_END_ADDRESS) {
+        return ai_.read_register(address);
+    }
+
+    // RI
+    if (address >= RI_START_ADDRESS && address <= RI_END_ADDRESS) {
+        return ri_.read_register(address);
+    }
     
     // PI
     if (address >= PI_START_ADDRESS && address <= PI_END_ADDRESS) {
         return pi_.read_register(address);
+    }
+
+    // SI
+    if (address >= SI_START_ADDRESS && address <= SI_END_ADDRESS) {
+        return si_.read_register(address);
     }
     
     // ROM
@@ -84,6 +108,30 @@ void MemoryMap::write(u32 address, T value)
     // MI
     if (address >= MI_START_ADDRESS && address <= MI_END_ADDRESS) {
         mi_.write_register(address, value);
+        return;
+    }
+
+    // VI
+    if (address >= VI_START_ADDRESS && address <= VI_END_ADDRESS) {
+        vi_.write_register(address, value);
+        return;
+    }
+
+    // AI
+    if (address >= AI_START_ADDRESS && address <= AI_END_ADDRESS) {
+        ai_.write_register(address, value);
+        return;
+    }
+
+    // RI
+    if (address >= RI_START_ADDRESS && address <= RI_END_ADDRESS) {
+        ri_.write_register(address, value);
+        return;
+    }
+
+    // SI
+    if (address >= SI_START_ADDRESS && address <= SI_END_ADDRESS) {
+        si_.write_register(address, value);
         return;
     }
     
