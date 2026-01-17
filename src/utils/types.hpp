@@ -92,29 +92,37 @@ static_assert(sizeof(f64) == 8, "f64 must be 8 bytes");
 }
 
 // ============================================================================
-// Byte Swap Helpers (for endianness conversion)
+// Byte Swap (for endianness conversion)
 // ============================================================================
 
-[[nodiscard]] constexpr u16 byte_swap16(u16 value) {
-    return (value >> 8) | (value << 8);
-}
-
-[[nodiscard]] constexpr u32 byte_swap32(u32 value) {
-    return ((value >> 24) & 0x000000FF) |
-           ((value >> 8)  & 0x0000FF00) |
-           ((value << 8)  & 0x00FF0000) |
-           ((value << 24) & 0xFF000000);
-}
-
-[[nodiscard]] constexpr u64 byte_swap64(u64 value) {
-    return ((value >> 56) & 0x00000000000000FFULL) |
-           ((value >> 40) & 0x000000000000FF00ULL) |
-           ((value >> 24) & 0x0000000000FF0000ULL) |
-           ((value >> 8)  & 0x00000000FF000000ULL) |
-           ((value << 8)  & 0x000000FF00000000ULL) |
-           ((value << 24) & 0x0000FF0000000000ULL) |
-           ((value << 40) & 0x00FF000000000000ULL) |
-           ((value << 56) & 0xFF00000000000000ULL);
+template<typename T>
+[[nodiscard]] constexpr T byte_swap(T value) {
+    if constexpr (sizeof(T) == 1) {
+        return value;
+    } else if constexpr (sizeof(T) == 2) {
+        auto v = static_cast<u16>(value);
+        return static_cast<T>((v >> 8) | (v << 8));
+    } else if constexpr (sizeof(T) == 4) {
+        auto v = static_cast<u32>(value);
+        return static_cast<T>(
+            ((v >> 24) & 0x000000FF) |
+            ((v >> 8)  & 0x0000FF00) |
+            ((v << 8)  & 0x00FF0000) |
+            ((v << 24) & 0xFF000000)
+        );
+    } else if constexpr (sizeof(T) == 8) {
+        auto v = static_cast<u64>(value);
+        return static_cast<T>(
+            ((v >> 56) & 0x00000000000000FFULL) |
+            ((v >> 40) & 0x000000000000FF00ULL) |
+            ((v >> 24) & 0x0000000000FF0000ULL) |
+            ((v >> 8)  & 0x00000000FF000000ULL) |
+            ((v << 8)  & 0x000000FF00000000ULL) |
+            ((v << 24) & 0x0000FF0000000000ULL) |
+            ((v << 40) & 0x00FF000000000000ULL) |
+            ((v << 56) & 0xFF00000000000000ULL)
+        );
+    }
 }
 
 } // namespace n64

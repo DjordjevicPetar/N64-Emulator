@@ -171,42 +171,42 @@ u32 LUI(VR4300& cpu, const Instruction& instr) {
 // Load instructions
 u32 LB(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_BYTE);
+    u64 value = cpu.read_memory<u8>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend8(value));
     return 1;
 }
 
 u32 LBU(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_BYTE);
+    u64 value = cpu.read_memory<u8>(address);
     cpu.set_gpr(instr.i_type.rt, extend8(value));
     return 1;
 }
 
 u32 LH(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_HALF_WORD);
+    u64 value = cpu.read_memory<u16>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend16(value));
     return 1;
 }
 
 u32 LHU(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_HALF_WORD);
+    u64 value = cpu.read_memory<u16>(address);
     cpu.set_gpr(instr.i_type.rt, extend16(value));
     return 1;
 }
 
 u32 LW(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_WORD);
+    u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend32(value));
     return 1;
 }
 
 u32 LWU(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_WORD);
+    u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, extend32(value));
     return 1;
 }
@@ -217,7 +217,7 @@ u32 LWL(VR4300& cpu, const Instruction& instr) {
     u64 aligned = addr & ~static_cast<u64>(3);
     u32 offset = static_cast<u32>(addr & 3);
     
-    u32 mem = static_cast<u32>(cpu.read_memory(aligned, IO_SIZE::IO_SIZE_WORD));
+    u32 mem = static_cast<u32>(cpu.read_memory<u32>(aligned));
     u32 rt = static_cast<u32>(cpu.gpr(instr.i_type.rt));
     u32 result = 0;
     
@@ -238,7 +238,7 @@ u32 LWR(VR4300& cpu, const Instruction& instr) {
     u64 aligned = addr & ~static_cast<u64>(3);
     u32 offset = static_cast<u32>(addr & 3);
     
-    u32 mem = static_cast<u32>(cpu.read_memory(aligned, IO_SIZE::IO_SIZE_WORD));
+    u32 mem = static_cast<u32>(cpu.read_memory<u32>(aligned));
     u32 rt = static_cast<u32>(cpu.gpr(instr.i_type.rt));
     u32 result = 0;
     
@@ -255,7 +255,7 @@ u32 LWR(VR4300& cpu, const Instruction& instr) {
 
 u32 LD(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    u64 value = cpu.read_memory<u64>(address);
     cpu.set_gpr(instr.i_type.rt, value);
     return 1;
 }
@@ -266,7 +266,7 @@ u32 LDL(VR4300& cpu, const Instruction& instr) {
     u64 aligned = addr & ~static_cast<u64>(7);  // Poravnaj na 8 bajtova
     u32 offset = static_cast<u32>(addr & 7);
     
-    u64 mem = cpu.read_memory(aligned, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    u64 mem = cpu.read_memory<u64>(aligned);
     u64 rt = cpu.gpr(instr.i_type.rt);
     u64 result = 0;
     
@@ -291,7 +291,7 @@ u32 LDR(VR4300& cpu, const Instruction& instr) {
     u64 aligned = addr & ~static_cast<u64>(7);
     u32 offset = static_cast<u32>(addr & 7);
     
-    u64 mem = cpu.read_memory(aligned, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    u64 mem = cpu.read_memory<u64>(aligned);
     u64 rt = cpu.gpr(instr.i_type.rt);
     u64 result = 0;
     
@@ -312,7 +312,7 @@ u32 LDR(VR4300& cpu, const Instruction& instr) {
 
 u32 LL(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_WORD);
+    u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend32(value));
     cpu.set_LLbit(true);
     cpu.cp0().set_reg(CP0Reg::LL_ADDR, cpu.cp0().translate_address(address));
@@ -321,7 +321,7 @@ u32 LL(VR4300& cpu, const Instruction& instr) {
 
 u32 LLD(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u64 value = cpu.read_memory(address, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    u64 value = cpu.read_memory<u64>(address);
     cpu.set_gpr(instr.i_type.rt, value);
     cpu.set_LLbit(true);
     cpu.cp0().set_reg(CP0Reg::LL_ADDR, cpu.cp0().translate_address(address));
@@ -331,19 +331,19 @@ u32 LLD(VR4300& cpu, const Instruction& instr) {
 // Store instructions
 u32 SB(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    cpu.write_memory(address, cpu.gpr(instr.i_type.rt), IO_SIZE::IO_SIZE_BYTE);
+    cpu.write_memory<u8>(address, static_cast<u8>(cpu.gpr(instr.i_type.rt)));
     return 1;
 }
 
 u32 SH(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    cpu.write_memory(address, cpu.gpr(instr.i_type.rt), IO_SIZE::IO_SIZE_HALF_WORD);
+    cpu.write_memory<u16>(address, static_cast<u16>(cpu.gpr(instr.i_type.rt)));
     return 1;
 }
 
 u32 SW(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    cpu.write_memory(address, cpu.gpr(instr.i_type.rt), IO_SIZE::IO_SIZE_WORD);
+    cpu.write_memory<u32>(address, static_cast<u32>(cpu.gpr(instr.i_type.rt)));
     return 1;
 }
 
@@ -354,7 +354,7 @@ u32 SWL(VR4300& cpu, const Instruction& instr) {
     u32 offset = static_cast<u32>(addr & 3);
     
     u32 rt = static_cast<u32>(cpu.gpr(instr.i_type.rt));
-    u32 mem = static_cast<u32>(cpu.read_memory(aligned, IO_SIZE::IO_SIZE_WORD));
+    u32 mem = static_cast<u32>(cpu.read_memory<u32>(aligned));
     u32 result = 0;
     
     switch (offset) {
@@ -364,7 +364,7 @@ u32 SWL(VR4300& cpu, const Instruction& instr) {
         case 3: result = (mem & 0xFFFFFF00) | (rt >> 24); break;
     }
     
-    cpu.write_memory(aligned, result, IO_SIZE::IO_SIZE_WORD);
+    cpu.write_memory<u32>(aligned, result);
     return 1;
 }
 
@@ -375,7 +375,7 @@ u32 SWR(VR4300& cpu, const Instruction& instr) {
     u32 offset = static_cast<u32>(addr & 3);
     
     u32 rt = static_cast<u32>(cpu.gpr(instr.i_type.rt));
-    u32 mem = static_cast<u32>(cpu.read_memory(aligned, IO_SIZE::IO_SIZE_WORD));
+    u32 mem = static_cast<u32>(cpu.read_memory<u32>(aligned));
     u32 result = 0;
     
     switch (offset) {
@@ -385,13 +385,13 @@ u32 SWR(VR4300& cpu, const Instruction& instr) {
         case 3: result = rt; break;
     }
     
-    cpu.write_memory(aligned, result, IO_SIZE::IO_SIZE_WORD);
+    cpu.write_memory<u32>(aligned, result);
     return 1;
 }
 
 u32 SD(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    cpu.write_memory(address, cpu.gpr(instr.i_type.rt), IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    cpu.write_memory<u64>(address, cpu.gpr(instr.i_type.rt));
     return 1;
 }
 
@@ -402,7 +402,7 @@ u32 SDL(VR4300& cpu, const Instruction& instr) {
     u32 offset = static_cast<u32>(addr & 7);
     
     u64 rt = cpu.gpr(instr.i_type.rt);
-    u64 mem = cpu.read_memory(aligned, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    u64 mem = cpu.read_memory<u64>(aligned);
     u64 result = 0;
     
     switch (offset) {
@@ -416,7 +416,7 @@ u32 SDL(VR4300& cpu, const Instruction& instr) {
         case 7: result = (mem & 0xFFFFFFFFFFFFFF00ULL) | (rt >> 56); break;
     }
     
-    cpu.write_memory(aligned, result, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    cpu.write_memory<u64>(aligned, result);
     return 1;
 }
 
@@ -427,7 +427,7 @@ u32 SDR(VR4300& cpu, const Instruction& instr) {
     u32 offset = static_cast<u32>(addr & 7);
     
     u64 rt = cpu.gpr(instr.i_type.rt);
-    u64 mem = cpu.read_memory(aligned, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    u64 mem = cpu.read_memory<u64>(aligned);
     u64 result = 0;
     
     switch (offset) {
@@ -441,7 +441,7 @@ u32 SDR(VR4300& cpu, const Instruction& instr) {
         case 7: result = rt; break;
     }
     
-    cpu.write_memory(aligned, result, IO_SIZE::IO_SIZE_DOUBLE_WORD);
+    cpu.write_memory<u64>(aligned, result);
     return 1;
 }
 
@@ -452,7 +452,7 @@ u32 SC(VR4300& cpu, const Instruction& instr) {
     
     bool success = cpu.get_LLbit() && (ll_addr == paddr);
     if (success) {
-        cpu.write_memory(vaddr, cpu.gpr(instr.i_type.rt), IO_SIZE::IO_SIZE_WORD);
+        cpu.write_memory<u32>(vaddr, static_cast<u32>(cpu.gpr(instr.i_type.rt)));
     }
     cpu.set_gpr(instr.i_type.rt, success ? 1 : 0);
     cpu.set_LLbit(false);
@@ -466,7 +466,7 @@ u32 SCD(VR4300& cpu, const Instruction& instr) {
     
     bool success = cpu.get_LLbit() && (ll_addr == paddr);
     if (success) {
-        cpu.write_memory(vaddr, cpu.gpr(instr.i_type.rt), IO_SIZE::IO_SIZE_DOUBLE_WORD);
+        cpu.write_memory<u64>(vaddr, cpu.gpr(instr.i_type.rt));
     }
     cpu.set_gpr(instr.i_type.rt, success ? 1 : 0);
     cpu.set_LLbit(false);

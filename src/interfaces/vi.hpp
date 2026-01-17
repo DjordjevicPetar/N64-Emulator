@@ -1,16 +1,15 @@
 #pragma once
 
 #include "../utils/types.hpp"
-#include "../memory/memory.hpp"
 
 namespace n64::interfaces {
 
-class VI : public Memory {
+class VI {
 public:
     VI();
     ~VI();
 
-    [[nodiscard]] u32 read_memory(u32 address) override;
-    void write_memory(u32 address, u32 value) override;
+    [[nodiscard]] u32 read_register(u32 address) const;
+    void write_register(u32 address, u32 value);
 };
 }

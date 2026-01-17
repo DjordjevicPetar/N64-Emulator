@@ -42,7 +42,9 @@ public:
 
     // Register access
     void set_reg(u8 index, u64 value);
+    void set_reg(CP0Reg reg, u64 value) { set_reg(static_cast<u8>(reg), value); }
     [[nodiscard]] u64 get_reg(u8 index) const;
+    [[nodiscard]] u64 get_reg(CP0Reg reg) const { return get_reg(static_cast<u8>(reg)); }
 
     // Address translation
     [[nodiscard]] u32 translate_address(u64 virtual_address) const;

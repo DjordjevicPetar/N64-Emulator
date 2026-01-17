@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../utils/types.hpp"
+#include "../utils/types.hpp"
 
 namespace n64::memory {
 
@@ -64,12 +64,14 @@ constexpr u32 RI_END_ADDRESS = 0x047FFFFF;
 constexpr u32 SI_START_ADDRESS = 0x04800000;
 constexpr u32 SI_END_ADDRESS = 0x048FFFFF;
 
-// I/O size
-enum class IO_SIZE {
-    IO_SIZE_BYTE = 1,
-    IO_SIZE_HALF_WORD = 2,
-    IO_SIZE_WORD = 4,
-    IO_SIZE_DOUBLE_WORD = 8,
-};
+// ROM Memory Constants
+constexpr u32 ROM_START_ADDRESS = 0x10000000;
+constexpr u32 ROM_END_ADDRESS = 0x1FBFFFFF;
+
+constexpr u32 ROM_SIZE = 0x04000000; // 64MB
+
+// PIF Memory Constants
+constexpr u32 PIF_START_ADDRESS = 0x1FC007C0;
+constexpr u32 PIF_END_ADDRESS = 0x1FC007FF;
 
 }

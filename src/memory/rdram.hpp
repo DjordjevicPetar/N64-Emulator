@@ -1,7 +1,8 @@
 #pragma once
 
+#include <vector>
 #include "../utils/types.hpp"
-#include "../memory/memory.hpp"
+#include "memory_constants.hpp"
 
 namespace n64::memory {
 
@@ -20,17 +21,32 @@ enum class RDRAM_REGISTERS_ADDRESS {
     RDRAM_REGISTER_ROW = 0x200
 };
 
-class RDRAM : public Memory {
+class RDRAM {
 public:
     RDRAM();
     ~RDRAM();
 
-    [[nodiscard]] u32 read_memory(u32 address) override;
-    void write_memory(u32 address, u32 value) override;
+    template <typename T>
+    [[nodiscard]] T read_memory(u32 address) const;
+
+    template <typename T>
+    void write_memory(u32 address, T value);
+
+    [[nodiscard]] u32 read_register(RDRAM_REGISTERS_ADDRESS address) const;
+    void write_register(RDRAM_REGISTERS_ADDRESS address, u32 value);
 
 private:
-    std::array<u32, RDRAM_MEMORY_SIZE> memory;
-
-    u32 translate_address(u32 address) const;
+    std::vector<u8> memory_;
+    u32 device_type_;
+    u32 device_id_;
+    u32 delay_;
+    u32 mode_;
+    u32 ref_interval_;
+    u32 ref_row_;
+    u32 ras_interval_;
+    u32 min_interval_;
+    u32 address_select_;
+    u32 device_manufacturer_;
+    u32 row_;
 };
 }

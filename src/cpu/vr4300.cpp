@@ -2,14 +2,14 @@
 
 namespace n64::cpu {
 
-VR4300::VR4300(Memory& memory)
+VR4300::VR4300(memory::MemoryMap& memory)
     : memory_(memory)
 {
 }
 
 void VR4300::read_next_instruction()
 {
-    current_instruction_ = Instruction(read_memory(pc_, IO_SIZE::IO_SIZE_WORD));
+    current_instruction_ = Instruction(read_memory<u32>(pc_));
     pc_ += 4;
 }
 
@@ -40,16 +40,27 @@ void VR4300::execute_next_instruction()
     }
 }
 
-u64 VR4300::read_memory(u64 address, IO_SIZE size) const
+template <typename T>
+T VR4300::read_memory(u64 address) const
 {
     u32 translated_address = translate_address(address);
-    return memory_.read_memory(translated_address, size);
+    return memory_.read<T>(translated_address);
 }
 
-void VR4300::write_memory(u64 address, u64 value, IO_SIZE size)
+template <typename T>
+void VR4300::write_memory(u64 address, T value)
 {
     u32 translated_address = translate_address(address);
-    memory_.write_memory(translated_address, value, size);
+    memory_.write<T>(translated_address, value);
 }
+
+template u8 VR4300::read_memory<u8>(u64 address) const;
+template u16 VR4300::read_memory<u16>(u64 address) const;
+template u32 VR4300::read_memory<u32>(u64 address) const;
+template u64 VR4300::read_memory<u64>(u64 address) const;
+template void VR4300::write_memory<u8>(u64 address, u8 value);
+template void VR4300::write_memory<u16>(u64 address, u16 value);
+template void VR4300::write_memory<u32>(u64 address, u32 value);
+template void VR4300::write_memory<u64>(u64 address, u64 value);
 
 }

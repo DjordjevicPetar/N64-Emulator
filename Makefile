@@ -9,9 +9,10 @@ else
     RUN_PREFIX := ./
 endif
 
-SOURCES := $(wildcard *.cpp)
+# Find all .cpp files in src/ and subdirectories
+SOURCES := $(shell find src -name '*.cpp')
 CXX := g++
-CXXFLAGS := -std=c++20 -O3 -Wall -I./inc
+CXXFLAGS := -std=c++20 -O3 -Wall -I./src
 
 .PHONY: clean build run
 
@@ -22,4 +23,4 @@ build: clean
 	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(TARGET)
 
 run: build
-	$(RUN_PREFIX)$(TARGET) $(ARGS) -l
+	$(RUN_PREFIX)$(TARGET) $(ARGS)
