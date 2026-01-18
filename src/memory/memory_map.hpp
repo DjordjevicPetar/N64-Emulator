@@ -5,8 +5,9 @@
 #include "memory_constants.hpp"
 #include "rdram.hpp"
 #include "rom.hpp"
-#include "../interfaces/ai.hpp"
 #include "../interfaces/mi.hpp"
+#include "../rcp/rsp/rsp.hpp"
+#include "../interfaces/ai.hpp"
 #include "../interfaces/vi.hpp"
 #include "../interfaces/si.hpp"
 #include "../interfaces/ri.hpp"
@@ -32,6 +33,7 @@ private:
     RDRAM rdram_;
     ROM rom_;
     interfaces::MI mi_;
+    rcp::RSP rsp_;
     interfaces::AI ai_;
     interfaces::VI vi_;
     interfaces::SI si_;
