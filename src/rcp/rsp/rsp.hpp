@@ -8,6 +8,10 @@
 #include "su.hpp"
 #include "vu.hpp"
 
+namespace n64::rdp {
+    class RDP;  // Forward declaration
+}
+
 namespace n64::rcp {
 
 enum RSP_REGISTERS_ADDRESS : u32 {
@@ -24,7 +28,7 @@ enum RSP_REGISTERS_ADDRESS : u32 {
 
 class RSP {
 public:
-    RSP(interfaces::MI& mi);
+    RSP(interfaces::MI& mi, rdp::RDP& rdp);
     ~RSP();
 
     template<typename T>
@@ -35,6 +39,10 @@ public:
     [[nodiscard]] u32 read_register(u32 address) const;
     void write_register(u32 address, u32 value);
 
+    // COP0 access (registers 0-7 = RSP, 8-15 = RDP)
+    [[nodiscard]] u32 read_cop0(u32 reg) const;
+    void write_cop0(u32 reg, u32 value);
+
     void execute_next_instruction();
     void delay_branch(u32 target);
 
@@ -42,11 +50,14 @@ public:
     [[nodiscard]] VU& vu() { return vu_; }
     [[nodiscard]] u32 pc() const { return pc_; }
 
+    void set_breakpoint();
+
 private:
 
     [[nodiscard]] RSPInstruction fetch_instruction();
 
     interfaces::MI& mi_;
+    rdp::RDP& rdp_;
     RSPInstructionTable instruction_table_;
     SU su_;
     VU vu_;

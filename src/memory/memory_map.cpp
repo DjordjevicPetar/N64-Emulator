@@ -8,7 +8,8 @@ MemoryMap::MemoryMap(const std::string& rom_path)
     : rdram_()
     , rom_(pi_, rom_path)
     , mi_()
-    , rsp_(mi_)
+    , rdp_()
+    , rsp_(mi_, rdp_)
     , ai_(mi_)
     , vi_(mi_)
     , si_(mi_)
@@ -55,6 +56,11 @@ T MemoryMap::read(u32 address)
     // RSP
     if (address >= RSP_START_ADDRESS && address <= RSP_END_ADDRESS) {
         return rsp_.read<T>(address);
+    }
+
+    // RDP
+    if (address >= RDP_START_ADDRESS && address <= RDP_END_ADDRESS) {
+        return rdp_.read<T>(address);
     }
 
     // MI
@@ -114,6 +120,12 @@ void MemoryMap::write(u32 address, T value)
     // RSP
     if (address >= RSP_START_ADDRESS && address <= RSP_END_ADDRESS) {
         rsp_.write<T>(address, value);
+        return;
+    }
+
+    // RDP
+    if (address >= RDP_START_ADDRESS && address <= RDP_END_ADDRESS) {
+        rdp_.write<T>(address, value);
         return;
     }
 

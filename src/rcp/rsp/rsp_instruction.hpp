@@ -28,6 +28,16 @@ union RSPInstruction {
         u32 opcode : 6;           // [31:26]
     } r_type;
 
+    struct {
+        u32 funct : 6;            // [5:0]
+        u32 vd : 5;               // [10:6]
+        u32 vs : 5;               // [15:11]
+        u32 vt : 5;               // [20:16]
+        u32 e : 4;                // [24:21]
+        u32 one : 1;              // [25]
+        u32 opcode : 6;           // [31:26]
+    } v_type;
+    
     RSPInstruction(u32 value) : raw(value) {}
     explicit RSPInstruction() : raw(0) {}
 };

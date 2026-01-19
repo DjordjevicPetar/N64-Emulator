@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../utils/types.hpp"
+#include "../../utils/types.hpp"
 #include <array>
 
 namespace n64::rcp {

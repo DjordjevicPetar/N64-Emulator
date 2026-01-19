@@ -7,6 +7,7 @@
 #include "rom.hpp"
 #include "../interfaces/mi.hpp"
 #include "../rcp/rsp/rsp.hpp"
+#include "../rcp/rdp/rdp.hpp"
 #include "../interfaces/ai.hpp"
 #include "../interfaces/vi.hpp"
 #include "../interfaces/si.hpp"
@@ -33,6 +34,7 @@ private:
     RDRAM rdram_;
     ROM rom_;
     interfaces::MI mi_;
+    rdp::RDP rdp_;
     rcp::RSP rsp_;
     interfaces::AI ai_;
     interfaces::VI vi_;

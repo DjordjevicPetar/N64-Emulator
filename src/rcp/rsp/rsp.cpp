@@ -1,12 +1,14 @@
 #include "rsp.hpp"
+#include "../rdp/rdp.hpp"
 #include "../../memory/memory_constants.hpp"
 #include <stdexcept>
 #include <string>
 
 namespace n64::rcp {
 
-RSP::RSP(interfaces::MI& mi)
+RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp)
     : mi_(mi)
+    , rdp_(rdp)
     , instruction_table_()
     , su_()
     , vu_()
@@ -245,6 +247,53 @@ void RSP::delay_branch(u32 target)
 {
     delay_branch_pending_ = true;
     delay_pc_ = target;
+}
+
+void RSP::set_breakpoint()
+{
+    status_ = set_bit(status_, 1, true);
+}
+
+u32 RSP::read_cop0(u32 reg) const
+{
+    switch (reg) {
+        case 0: return dma_spaddr_;
+        case 1: return dma_ramaddr_;
+        case 2: return dma_rdlen_;
+        case 3: return dma_wrlen_;
+        case 4: return status_;
+        case 5: return dma_full_;
+        case 6: return dma_busy_;
+        case 7: return semaphore_;
+        // RDP registers (8-15)
+        case 8:  return rdp_.read_register(rdp::DPC_START);
+        case 9:  return rdp_.read_register(rdp::DPC_END);
+        case 10: return rdp_.read_register(rdp::DPC_CURRENT);
+        case 11: return rdp_.read_register(rdp::DPC_STATUS);
+        case 12: return rdp_.read_register(rdp::DPC_CLOCK);
+        case 13: return rdp_.read_register(rdp::DPC_BUF_BUSY);
+        case 14: return rdp_.read_register(rdp::DPC_PIPE_BUSY);
+        case 15: return rdp_.read_register(rdp::DPC_TMEM_BUSY);
+        default: return 0;
+    }
+}
+
+void RSP::write_cop0(u32 reg, u32 value)
+{
+    switch (reg) {
+        case 0: dma_spaddr_ = value & 0x00001FF8; break;
+        case 1: dma_ramaddr_ = value & 0x00FFFFF8; break;
+        case 2: dma_rdlen_ = value & 0xFF8FFFF8; break;
+        case 3: dma_wrlen_ = value & 0xFF8FFFF8; break;
+        case 4: write_register(RSP_STATUS, value); break;
+        case 7: semaphore_ = value & 0x00000001; break;
+        // RDP registers (8-15)
+        case 8:  rdp_.write_register(rdp::DPC_START, value); break;
+        case 9:  rdp_.write_register(rdp::DPC_END, value); break;
+        case 11: rdp_.write_register(rdp::DPC_STATUS, value); break;
+        // Registers 5, 6, 10, 12-15 are read-only
+        default: break;
+    }
 }
 
 RSPInstruction RSP::fetch_instruction()
