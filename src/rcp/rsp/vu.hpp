@@ -39,6 +39,8 @@ public:
 
     u16 read_element(u32 index, u32 element) const;
     void write_element(u32 index, u32 element, u16 value);
+    u8 read_element_byte(u32 index, u32 element) const;
+    void write_element_byte(u32 index, u32 element, u8 value);
 
     u16 read_control_register(u32 index) const;
     void write_control_register(u32 index, u16 value);
@@ -49,7 +51,6 @@ public:
     void set_accumulator_low(u32 index, s16 value) { accumulator_.set_low(index, value); };
     void set_accumulator_mid(u32 index, s16 value) { accumulator_.set_mid(index, value); };
     void set_accumulator_high(u32 index, s16 value) { accumulator_.set_high(index, value); };
-
 
     u16 get_vt_element(u32 vt, u32 lane, u32 e) const;
 

@@ -383,118 +383,332 @@ u8 VNOP(RSP& rsp, const RSPInstruction& instr)
 // LWC2 - Vector loads
 u8 LBV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset;
+    s32 address = base + offset;
+    u8 value = rsp.read<u8>((address & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+    rsp.vu().write_element_byte(instr.l_type.vt, instr.l_type.element, value);
+    return 1;
 }
 
 u8 LSV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 1;
+    s32 address = base + offset;
+    u32 element = instr.l_type.element;
+    for (u32 i = 0; i < 2; i++) {
+        u8 value = rsp.read<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        rsp.vu().write_element_byte(instr.l_type.vt, (element + i) & 0x0F, value);
+    }
+    return 1;
 }
 
 u8 LLV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 2;
+    u32 address = base + offset;
+    u32 element = instr.l_type.element;
+    for (u32 i = 0; i < 4; i++) {
+        u8 value = rsp.read<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        rsp.vu().write_element_byte(instr.l_type.vt, (element + i) & 0x0F, value);
+    }
+    return 1;
 }
 
 u8 LDV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 3;
+    u32 address = base + offset;
+    u32 element = instr.l_type.element;
+    for (u32 i = 0; i < 8; i++) {
+        u8 value = rsp.read<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        rsp.vu().write_element_byte(instr.l_type.vt, (element + i) & 0x0F, value);
+    }
+    return 1;
 }
 
 u8 LQV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 start_element = address & 0xF;
+    for (u32 i = 0; i < 16 - start_element; i++) {
+        u8 value = rsp.read<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        rsp.vu().write_element_byte(instr.l_type.vt, (start_element + i) & 0x0F, value);
+    }
+    return 1;
 }
 
 u8 LRV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 index = address & 0xF;
+
+    u32 start_element = 16 - index;
+    u32 aligned_addr = address & ~0xF;
+
+    for (u32 i = 0; i < index; i++) {
+        u8 value = rsp.read<u8>(((aligned_addr + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        rsp.vu().write_element_byte(instr.l_type.vt, (start_element + i) & 0x0F, value);
+    }
+    return 1;
 }
 
 u8 LPV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 3;
+    u32 address = base + offset;
+
+    for (u32 i = 0; i < 8; i++) {
+        u8 value = rsp.read<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        u16 element_value = static_cast<u16>(value) << 8;
+        rsp.vu().write_element(instr.l_type.vt, i, element_value);
+    }
+    return 1;
 }
 
 u8 LUV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 3;
+    u32 address = base + offset;
+
+    for (u32 i = 0; i < 8; i++) {
+        u8 value = rsp.read<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        u16 element_value = static_cast<u16>(value) << 7;
+        rsp.vu().write_element(instr.l_type.vt, i, element_value);
+    }
+    return 1;
 }
 
 u8 LHV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+
+    for (u32 i = 0; i < 8; i++) {
+        u8 value = rsp.read<u8>(((address + i * 2) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        u16 element_value = static_cast<u16>(value) << 7;
+        rsp.vu().write_element(instr.l_type.vt, i, element_value);
+    }
+    return 1;
 }
 
 u8 LFV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 start_element = instr.l_type.element;
+
+    for (u32 i = 0; i < 4; i++) {
+        u8 value = rsp.read<u8>(((address + i * 4) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS);
+        u16 element_value = static_cast<u16>(value) << 7;
+        rsp.vu().write_element(instr.l_type.vt, (start_element + i) & 0xF, element_value);
+    }
+    return 1;
 }
 
 u8 LTV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 vt = instr.l_type.vt & 0x18;
+    u32 start_element = instr.l_type.element >> 1;
+
+    for (u32 i = 0; i < 8; i++) {
+        u32 mem_addr = ((address + i * 2) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS;
+        u8 hi = rsp.read<u8>(mem_addr);
+        u8 lo = rsp.read<u8>(mem_addr + 1);
+        u16 value = (hi << 8) | lo;
+        u32 reg = vt | ((i + start_element) & 0x07);
+        rsp.vu().write_element(reg, i, value);
+    }
+
+    return 1;
 }
 
 // SWC2 - Vector stores
 u8 SBV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset;
+    s32 address = base + offset;
+    u8 value = rsp.vu().read_element_byte(instr.l_type.vt, instr.l_type.element);
+    rsp.write<u8>((address & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    return 1;
 }
 
 u8 SSV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 1;
+    s32 address = base + offset;
+    u32 element = instr.l_type.element;
+    for (u32 i = 0; i < 2; i++) {
+        u8 value = rsp.vu().read_element_byte(instr.l_type.vt, (element + i) & 0x0F);
+        rsp.write<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    }
+    return 1;
 }
 
 u8 SLV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 2;
+    s32 address = base + offset;
+    u32 element = instr.l_type.element;
+    for (u32 i = 0; i < 4; i++) {
+        u8 value = rsp.vu().read_element_byte(instr.l_type.vt, (element + i) & 0x0F);
+        rsp.write<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    }
+    return 1;
 }
 
 u8 SDV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 3;
+    s32 address = base + offset;
+    u32 element = instr.l_type.element;
+    for (u32 i = 0; i < 8; i++) {
+        u8 value = rsp.vu().read_element_byte(instr.l_type.vt, (element + i) & 0x0F);
+        rsp.write<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    }
+    return 1;
 }
 
 u8 SQV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    s32 address = base + offset;
+    u32 start_element = address & 0xF;
+    for (u32 i = 0; i < 16 - start_element; i++) {
+        u8 value = rsp.vu().read_element_byte(instr.l_type.vt, i);
+        rsp.write<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    }
+    return 1;
 }
 
 u8 SRV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 index = address & 0xF;
+
+    u32 start_element = 16 - index;
+    u32 aligned_addr = address & ~0xF;
+
+    for (u32 i = 0; i < index; i++) {
+        u8 value = rsp.vu().read_element_byte(instr.l_type.vt, (start_element + i) & 0x0F);
+        rsp.write<u8>(((aligned_addr + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    }
+
+    return 1;
 }
 
 u8 SPV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 3;
+    u32 address = base + offset;
+
+    for (u32 i = 0; i < 8; i++) {
+        u8 value = rsp.vu().read_element(instr.l_type.vt, i) >> 8;
+        rsp.write<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value);
+    }
+    return 1;
 }
 
 u8 SUV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 3;
+    u32 address = base + offset;
+
+    for (u32 i = 0; i < 8; i++) {
+        u16 value = rsp.vu().read_element(instr.l_type.vt, i);
+        u8 element_value = (value >> 7) & 0x00FF;
+        rsp.write<u8>(((address + i) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, element_value);
+    }
+    return 1;
 }
 
 u8 SHV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+
+    for (u32 i = 0; i < 8; i++) {
+        u16 value = rsp.vu().read_element(instr.l_type.vt, i);
+        u8 element_value = (value >> 7) & 0x00FF;
+        rsp.write<u8>(((address + i * 2) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, element_value);
+    }
+    return 1;
 }
 
 u8 SFV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 start_element = instr.l_type.element >> 1;
+
+    for (u32 i = 0; i < 4; i++) {
+        u16 value = rsp.vu().read_element(instr.l_type.vt, (start_element + i) & 0x0F);
+        u8 element_value = (value >> 7) & 0x00FF;
+        rsp.write<u8>(((address + i * 4) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, element_value);
+    }
+    return 1;
 }
 
 u8 SWV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 vt = instr.l_type.vt & 0x18;
+    u32 start_element = instr.l_type.element >> 1;
+
+    for (u32 i = 0; i < 8; i++) {
+        u32 reg = vt | ((i + start_element) & 0x07);
+        u32elem = (i + start_element) & 0x07;
+        u16 value = rsp.vu().read_element(reg, elem);
+        rsp.write<u8>(((address + i * 2) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value >> 8);
+        rsp.write<u8>(((address + i * 2 + 1) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value & 0x00FF);
+    }
+
+    return 1;
 }
 
 u8 STV(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 base = rsp.su().read_gpr(instr.l_type.base);
+    s32 offset = instr.l_type.offset << 4;
+    u32 address = base + offset;
+    u32 vt = instr.l_type.vt & 0x18;
+    u32 start_element = instr.l_type.element >> 1;
+
+    for (u32 i = 0; i < 8; i++) {
+        u32 reg = vt | ((i + start_element) & 0x07);
+        u16 value = rsp.vu().read_element(reg, i);
+        rsp.write<u8>(((address + i * 2) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value >> 8);
+        rsp.write<u8>(((address + i * 2 + 1) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value & 0x00FF);
+    }
+
+    return 1;
 }
 
 } // namespace n64::rcp

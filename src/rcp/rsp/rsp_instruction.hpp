@@ -38,6 +38,15 @@ union RSPInstruction {
         u32 opcode : 6;           // [31:26]
     } v_type;
     
+    struct {
+        u32 offset : 7;
+        u32 element : 4;
+        u32 opcode : 5;
+        u32 vt : 5;
+        u32 base : 5;
+        u32 prefix : 6;
+    } l_type;
+
     RSPInstruction(u32 value) : raw(value) {}
     explicit RSPInstruction() : raw(0) {}
 };

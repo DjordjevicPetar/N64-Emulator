@@ -18,6 +18,24 @@ void VU::write_element(u32 index, u32 element, u16 value)
     gpr_[index].elements[element] = value;
 }
 
+u8 VU::read_element_byte(u32 index, u32 element) const
+{
+    if (element & 0x01) {
+        return gpr_[index].elements[element >> 1] & 0x00FF;
+    } else {
+        return (gpr_[index].elements[element >> 1] >> 8) & 0x00FF;
+    }
+}
+
+void VU::write_element_byte(u32 index, u32 element, u8 value)
+{
+    if (element & 0x01) {
+        gpr_[index].elements[element >> 1] = (gpr_[index].elements[element >> 1] & 0xFF00) | value;
+    } else {
+        gpr_[index].elements[element >> 1] = (gpr_[index].elements[element >> 1] & 0x00FF) | (value << 8);
+    }
+}
+
 u16 VU::read_control_register(u32 index) const
 {
     switch (index) {
