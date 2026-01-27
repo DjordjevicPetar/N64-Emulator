@@ -210,42 +210,383 @@ u8 VSUBC(RSP& rsp, const RSPInstruction& instr)
 // COP2 Select/Compare instructions
 u8 VLT(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u32 new_vcc = 0;
+    u16 old_vco = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCO);
+    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
+    s16 result = 0;
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+        bool vco_i = (old_vco >> i) & 1;
+        bool vce_i = (old_vce >> i) & 1;
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+
+        if (element_vs < element_vt) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else if ((element_vs == element_vt) && vco_i && !vce_i) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else {
+            new_vcc |= 0;
+            result = rsp.vu().read_element(vt, j);
+        }
+
+        rsp.vu().set_accumulator_low(i, result);
+        rsp.vu().write_element(vd, i, result);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, 0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, 0);
+    return 1;
 }
 
 u8 VEQ(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u32 new_vcc = 0;
+    s16 result = 0;
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+        bool vce_i = (rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE) >> i) & 1;
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+
+        if ((element_vs == element_vt) && vce_i) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else {
+            new_vcc |= 0;
+            result = rsp.vu().read_element(vt, j);
+        }
+
+        rsp.vu().set_accumulator_low(i, result);
+        rsp.vu().write_element(vd, i, result);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, 0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, 0);
+    return 1;
 }
 
 u8 VNE(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u16 new_vcc = 0;
+    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
+    s16 result = 0;
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+        bool vce_i = (old_vce >> i) & 1;
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+
+        if (element_vs < element_vt) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else if (element_vs > element_vt) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else if ((element_vs == element_vt) && !vce_i) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else {
+            new_vcc |= 0;
+            result = rsp.vu().read_element(vt, j);
+        }
+
+        rsp.vu().set_accumulator_low(i, result);
+        rsp.vu().write_element(vd, i, result);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, 0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, 0);
+    return 1;
 }
 
 u8 VGE(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u16 new_vcc = 0;
+    u16 old_vco = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCO);
+    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+        bool vco_i = (old_vco >> i) & 1;
+        bool vce_i = (old_vce >> i) & 1;
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+
+        if (element_vs > element_vt) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else if ((element_vs == element_vt) && (!vco_i || vce_i)) {
+            new_vcc |= 1 << i;
+            result = rsp.vu().read_element(vs, i);
+        } else {
+            new_vcc |= 0;
+            result = rsp.vu().read_element(vt, j);
+        }
+
+        rsp.vu().set_accumulator_low(i, result);
+        rsp.vu().write_element(vd, i, result);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, 0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, 0);
+    return 1;
 }
 
 u8 VCL(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u16 old_vcc = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCC);
+    u16 new_vcc = old_vcc;
+    u16 old_vco = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCO);
+    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+        bool sign = (old_vco >> i) & 1;
+        bool ge = (old_vcc >> (i + 8)) & 1;
+        bool le = (old_vcc >> i) & 1;
+        bool vce = (old_vce >> i) & 1;
+        bool eq = !((old_vco >> (i + 8)) & 1);
+        s16 di;
+
+        if (sign) {
+            u32 sum = static_cast<u16>(element_vs) + static_cast<u16>(element_vt);
+            bool carry = sum > 0xFFFF;
+            di = static_cast<s16>(sum & 0xFFFF);
+            
+            if (eq) {
+                le = (!vce && (di == 0) && !carry) || (vce && ((di == 0) || !carry));
+            }
+            di = le ? -element_vt : element_vs;
+        } else {
+            di = element_vs - element_vt;
+            if (eq) {
+                ge = di >= 0;
+            }
+            di = (ge) ? element_vt : element_vs;
+        }
+
+        rsp.vu().set_accumulator_low(i, di);
+        rsp.vu().write_element(vd, i, di);
+        new_vcc = (new_vcc & ~(0x0101 << i)) | (ge << (i + 8)) | (le << i);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, 0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, 0);
+    return 1;
 }
 
 u8 VCH(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u16 new_vcc = 0;
+    u16 new_vco = 0;
+    u8 new_vce = 0;
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+        bool sign = (element_vs ^ element_vt) < 0;
+        bool ge;
+        bool le;
+        bool vce;
+        bool eq;
+        s16 di;
+
+        if (sign) {
+            ge = element_vt < 0;
+            le = (element_vs + element_vt) <= 0;
+            vce = (element_vs + element_vt) == -1;
+            eq = (element_vs + element_vt) == 0;
+            di = (le) ? - element_vt : element_vs;
+        } else {
+            le = element_vt < 0;
+            ge = (element_vs - element_vt) >= 0;
+            vce = 0;
+            eq = (element_vs - element_vt) == 0;
+            di = (ge) ? element_vt : element_vs;
+        }
+
+        rsp.vu().set_accumulator_low(i, di);
+        rsp.vu().write_element(vd, i, di);
+        bool neq = !eq;
+        new_vcc |= (ge << (i + 8)) | (le << i);
+        new_vco |= (neq << (i + 8)) | (sign << i);
+        new_vce |= (vce << i);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, new_vce);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, new_vco);
+    return 1;
 }
 
 u8 VCR(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u16 new_vcc = 0;
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+        bool sign = (element_vs ^ element_vt) < 0;
+        bool ge;
+        bool le;
+        s16 di;
+
+        if (sign) {
+            ge = element_vt < 0;
+            le = (element_vs + element_vt + 1) <= 0;
+            di = le ? ~element_vt : element_vs;
+        } else {
+            le = element_vt < 0;
+            ge = (element_vs - element_vt) >= 0;
+            di = ge ? element_vt : element_vs;
+        }
+
+        rsp.vu().set_accumulator_low(i, di);
+        rsp.vu().write_element(vd, i, di);
+        new_vcc |= (ge << (i + 8)) | (le << i);
+    }
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCC, new_vcc);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCE, 0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, 0);
+    return 1;
 }
 
 u8 VMRG(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vt = instr.v_type.vt;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+    u16 vcc = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCC);
+
+    for (u32 i = 0, j = 0; i < 8; i++) {
+
+        if (elem == 0) {
+            j = i;
+        } else if ((elem & 0x0E) == 0x02) {
+            j = (elem & 0x01) + (i & 0x0E);
+        } else if ((elem & 0x0C) == 0x04) {
+            j = (elem & 0x03) + (i & 0x0C);
+        } else if ((elem & 0x08) == 0x08) {
+            j = elem & 0x07;
+        }
+
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().read_element(vt, j));
+        
+        s16 result = ((vcc >> i) & 1) ? element_vs : element_vt;
+
+        rsp.vu().set_accumulator_low(i, result);
+        rsp.vu().write_element(vd, i, result);
+    }
+    return 1;
 }
 
 // COP2 Logical instructions
@@ -336,7 +677,40 @@ u8 VNXOR(RSP& rsp, const RSPInstruction& instr)
 // COP2 Accumulator instructions
 u8 VSAR(RSP& rsp, const RSPInstruction& instr)
 {
-    return 0;
+    u32 vs = instr.v_type.vs;
+    u32 vd = instr.v_type.vd;
+    u32 elem = instr.v_type.elem;
+
+    switch(elem) {
+        case 0:
+            for (u32 i = 0; i < 8; i++) {
+                u16 value = rsp.vu().get_accumulator_high(i);
+                rsp.vu().write_element(vd, i, value);
+                value = rsp.vu().read_element(vs, i);
+                rsp.vu().set_accumulator_high(i, value);
+            }
+            break;
+        case 1:
+            for (u32 i = 0; i < 8; i++) {
+                u16 value = rsp.vu().get_accumulator_mid(i);
+                rsp.vu().write_element(vd, i, value);
+                value = rsp.vu().read_element(vs, i);
+                rsp.vu().set_accumulator_mid(i, value);
+            }
+            break;
+        case 2:
+            for (u32 i = 0; i < 8; i++) {
+                u16 value = rsp.vu().get_accumulator_low(i);
+                rsp.vu().write_element(vd, i, value);
+                value = rsp.vu().read_element(vs, i);
+                rsp.vu().set_accumulator_low(i, value);
+            }
+            break;
+        default:
+            printf("Invalid element index: %d\n", elem);
+            break;
+    }
+    return 1;
 }
 
 // COP2 Divide/Reciprocal instructions
@@ -684,7 +1058,7 @@ u8 SWV(RSP& rsp, const RSPInstruction& instr)
 
     for (u32 i = 0; i < 8; i++) {
         u32 reg = vt | ((i + start_element) & 0x07);
-        u32elem = (i + start_element) & 0x07;
+        u32 elem = (i + start_element) & 0x07;
         u16 value = rsp.vu().read_element(reg, elem);
         rsp.write<u8>(((address + i * 2) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value >> 8);
         rsp.write<u8>(((address + i * 2 + 1) & 0x00000FFF) + memory::RSP_DATA_MEMORY_START_ADDRESS, value & 0x00FF);

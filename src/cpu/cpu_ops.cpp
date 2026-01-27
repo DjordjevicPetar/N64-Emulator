@@ -1,6 +1,7 @@
 #include "cpu_ops.hpp"
 #include "vr4300.hpp"
 #include "cp0.hpp"
+#include <climits>
 
 namespace n64::cpu {
 
@@ -668,6 +669,15 @@ u32 DIV(VR4300& cpu, const Instruction& instr) {
     s32 rs = static_cast<s32>(cpu.gpr(instr.r_type.rs));
     s32 rt = static_cast<s32>(cpu.gpr(instr.r_type.rt));
     if (rt == 0) {
+        // Division by zero: LO = (rs >= 0) ? -1 : 1, HI = rs
+        cpu.set_lo(rs >= 0 ? -1LL : 1LL);
+        cpu.set_hi(sign_extend32(static_cast<u32>(rs)));
+        return 35;
+    }
+    // Handle overflow: MIN_INT / -1
+    if (rs == INT32_MIN && rt == -1) {
+        cpu.set_lo(sign_extend32(static_cast<u32>(rs)));
+        cpu.set_hi(0);
         return 35;
     }
     cpu.set_lo(sign_extend32(static_cast<u32>(rs / rt)));   // Quotient
@@ -679,6 +689,9 @@ u32 DIVU(VR4300& cpu, const Instruction& instr) {
     u32 rs = static_cast<u32>(cpu.gpr(instr.r_type.rs));
     u32 rt = static_cast<u32>(cpu.gpr(instr.r_type.rt));
     if (rt == 0) {
+        // Division by zero: LO = -1, HI = rs
+        cpu.set_lo(-1LL);
+        cpu.set_hi(sign_extend32(rs));
         return 35;
     }
     cpu.set_lo(sign_extend32(rs / rt));   // Quotient
@@ -708,6 +721,15 @@ u32 DDIV(VR4300& cpu, const Instruction& instr) {
     s64 rs = static_cast<s64>(cpu.gpr(instr.r_type.rs));
     s64 rt = static_cast<s64>(cpu.gpr(instr.r_type.rt));
     if (rt == 0) {
+        // Division by zero: LO = (rs >= 0) ? -1 : 1, HI = rs
+        cpu.set_lo(rs >= 0 ? -1LL : 1LL);
+        cpu.set_hi(rs);
+        return 69;
+    }
+    // Handle overflow: MIN_INT / -1
+    if (rs == INT64_MIN && rt == -1) {
+        cpu.set_lo(rs);
+        cpu.set_hi(0);
         return 69;
     }
     cpu.set_lo(rs / rt);
@@ -719,6 +741,9 @@ u32 DDIVU(VR4300& cpu, const Instruction& instr) {
     u64 rs = cpu.gpr(instr.r_type.rs);
     u64 rt = cpu.gpr(instr.r_type.rt);
     if (rt == 0) {
+        // Division by zero: LO = -1, HI = rs
+        cpu.set_lo(-1ULL);
+        cpu.set_hi(rs);
         return 69;
     }
     cpu.set_lo(rs / rt);
