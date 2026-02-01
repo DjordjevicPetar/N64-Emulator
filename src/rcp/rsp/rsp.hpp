@@ -5,6 +5,8 @@
 #include "../../interfaces/mi.hpp"
 #include "rsp_instruction.hpp"
 #include "rsp_instruction_table.hpp"
+#include "rsp_registers.hpp"
+#include "rsp_dma.hpp"
 #include "su.hpp"
 #include "vu.hpp"
 
@@ -12,23 +14,15 @@ namespace n64::rdp {
     class RDP;  // Forward declaration
 }
 
-namespace n64::rcp {
+namespace n64::memory {
+    class RDRAM;  // Forward declaration
+}
 
-enum RSP_REGISTERS_ADDRESS : u32 {
-    RSP_DMA_SPADDR = 0x04040000,
-    RSP_DMA_RAMADDR = 0x04040004,
-    RSP_DMA_RDLEN = 0x04040008,
-    RSP_DMA_WRLEN = 0x0404000C,
-    RSP_STATUS = 0x04040010,
-    RSP_DMA_FULL = 0x04040014,
-    RSP_DMA_BUSY = 0x04040018,
-    RSP_SEMAPHORE = 0x0404001C,
-    RSP_PC = 0x04080000
-};
+namespace n64::rcp {
 
 class RSP {
 public:
-    RSP(interfaces::MI& mi, rdp::RDP& rdp);
+    RSP(interfaces::MI& mi, rdp::RDP& rdp, memory::RDRAM& rdram);
     ~RSP();
 
     template<typename T>
@@ -51,6 +45,14 @@ public:
     [[nodiscard]] u32 pc() const { return pc_; }
 
     void set_breakpoint();
+    void process_passed_cycles(u32 cycles);
+
+    // RSP DMA functions
+    [[nodiscard]] RSPStatus& status() { return status_; }
+    [[nodiscard]] u8 read_dmem(u32 address) const { return dmem_[address]; }
+    [[nodiscard]] u8 read_imem(u32 address) const { return imem_[address]; }
+    void write_dmem(u32 address, u8 value) { dmem_[address] = value; }
+    void write_imem(u32 address, u8 value) { imem_[address] = value; }
 
 private:
 
@@ -65,17 +67,19 @@ private:
     std::array<u8, 4096> dmem_;
     std::array<u8, 4096> imem_;
 
-    u32 dma_spaddr_;
-    u32 dma_ramaddr_;
-    u32 dma_rdlen_;
-    u32 dma_wrlen_;
-    u32 status_;
-    u32 dma_full_;
-    u32 dma_busy_;
+    RSPDmaSPAddr dma_spaddr_;
+    RSPDmaRamAddr dma_ramaddr_;
+    RSPDmaLen dma_rdlen_;
+    RSPDmaLen dma_wrlen_;
+    RSPStatus status_;
     u32 semaphore_;
     u32 pc_;
 
     u32 delay_pc_;
     bool delay_branch_pending_;
+
+    RSPDMA dma_;
+    float rsp_cycle_accumulator_ = 0.0f;
 };
-}
+
+} // namespace n64::rcp

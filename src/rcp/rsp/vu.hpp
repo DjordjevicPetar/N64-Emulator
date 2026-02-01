@@ -53,13 +53,33 @@ public:
     void set_accumulator_high(u32 index, s16 value) { accumulator_.set_high(index, value); };
 
     u16 get_vt_element(u32 vt, u32 lane, u32 e) const;
+    u16 get_reciprocal(u32 index) const { return reciprocal_table_[index]; };
+    u16 get_square_root(u32 index) const { return square_root_table_[index]; };
+
+    s32 get_div_in() const { return div_in_; }
+    void set_div_in(s32 value) { div_in_ = value; }
+    s32 get_div_out() const { return div_out_; }
+    void set_div_out(s32 value) { div_out_ = value; }
+    bool get_div_dp() const { return div_dp_; }
+    void set_div_dp(bool value) { div_dp_ = value; }
 
 private:
+
+    void init_reciprocal_table_();
+    void init_square_root_table_();
+
     std::array<VUElement, 32> gpr_;
     VUAccumulator accumulator_;
     u16 vcc_;
     u16 vco_;
     u8 vce_;
+
+    std::array<u16, 512> reciprocal_table_;
+    std::array<u16, 512> square_root_table_;
+
+    s32 div_in_ = 0;   // Input for VRCPL/VRSQL (high part from VRCPH/VRSQH)
+    s32 div_out_ = 0;  // Output result
+    bool div_dp_ = false;  // Double-precision flag
 };
 
 }

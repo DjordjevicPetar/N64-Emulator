@@ -24,7 +24,7 @@ u32 VR4300::translate_address(u64 virtual_address) const
     return cp0_.translate_address(virtual_address);
 }
 
-void VR4300::execute_next_instruction()
+u32 VR4300::execute_next_instruction()
 {
     read_next_instruction();
 
@@ -33,11 +33,13 @@ void VR4300::execute_next_instruction()
     branch_pending_ = false;
 
     auto& instruction_entry = instruction_table_.lookup(current_instruction_);
-    instruction_entry.execute(*this, current_instruction_);
+    u32 cycles = instruction_entry.execute(*this, current_instruction_);
 
     if (should_branch) {
         pc_ = target;
     }
+
+    return cycles;
 }
 
 template <typename T>

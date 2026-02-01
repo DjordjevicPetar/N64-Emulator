@@ -100,6 +100,24 @@ static_assert(sizeof(f64) == 8, "f64 must be 8 bytes");
 }
 
 // ============================================================================
+// Clamp Helpers (for RSP VU saturation)
+// ============================================================================
+
+// Clamp to signed 16-bit range [-32768, 32767]
+[[nodiscard]] constexpr s16 clamp_signed(s32 value) {
+    if (value > 32767) return 32767;
+    if (value < -32768) return -32768;
+    return static_cast<s16>(value);
+}
+
+// Clamp to unsigned 16-bit range [0, 65535]
+[[nodiscard]] constexpr u16 clamp_unsigned(s32 value) {
+    if (value > 65535) return 65535;
+    if (value < 0) return 0;
+    return static_cast<u16>(value);
+}
+
+// ============================================================================
 // Byte Swap (for endianness conversion)
 // ============================================================================
 

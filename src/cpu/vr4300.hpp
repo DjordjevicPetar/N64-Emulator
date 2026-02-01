@@ -15,7 +15,7 @@ public:
     VR4300(memory::MemoryMap& memory);
     ~VR4300() = default;
 
-    void execute_next_instruction();
+    u32 execute_next_instruction();
     void delay_branch(u64 target);
     [[nodiscard]] u32 translate_address(u64 virtual_address) const;
 

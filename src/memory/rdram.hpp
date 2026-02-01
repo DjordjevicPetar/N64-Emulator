@@ -36,7 +36,7 @@ public:
     void write_register(RDRAM_REGISTERS_ADDRESS address, u32 value);
 
 private:
-    std::vector<u8> memory_;
+    std::vector<u8> memory_;  // 8MB on heap, not stack!
     u32 device_type_;
     u32 device_id_;
     u32 delay_;

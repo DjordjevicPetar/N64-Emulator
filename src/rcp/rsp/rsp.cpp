@@ -6,7 +6,7 @@
 
 namespace n64::rcp {
 
-RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp)
+RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp, memory::RDRAM& rdram)
     : mi_(mi)
     , rdp_(rdp)
     , instruction_table_()
@@ -14,18 +14,19 @@ RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp)
     , vu_()
     , dmem_()
     , imem_()
-    , dma_spaddr_(0)
-    , dma_ramaddr_(0)
-    , dma_rdlen_(0)
-    , dma_wrlen_(0)
-    , status_(0)
-    , dma_full_(0)
-    , dma_busy_(0)
+    , dma_spaddr_{.raw = 0}
+    , dma_ramaddr_{.raw = 0}
+    , dma_rdlen_{.raw = 0}
+    , dma_wrlen_{.raw = 0}
+    , status_{.raw = 0}
     , semaphore_(0)
     , pc_(0)
     , delay_pc_(0)
     , delay_branch_pending_(false)
+    , dma_(*this, rdram)
 {
+    // RSP starts halted - CPU must explicitly start it
+    status_.halt = 1;
 }
 RSP::~RSP() {}
 
@@ -78,19 +79,19 @@ void RSP::write(u32 address, T value) {
 u32 RSP::read_register(u32 address) const {
     switch (address) {
         case RSP_REGISTERS_ADDRESS::RSP_DMA_SPADDR:
-            return dma_spaddr_;
+            return dma_spaddr_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RAMADDR:
-            return dma_ramaddr_;
+            return dma_ramaddr_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RDLEN:
-            return dma_rdlen_;
+            return dma_rdlen_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_WRLEN:
-            return dma_wrlen_;
+            return dma_wrlen_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_STATUS:
-            return status_;
+            return status_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_FULL:
-            return dma_full_;
+            return status_.dma_full;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_BUSY:
-            return dma_busy_;
+            return status_.dma_busy;
         case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:
             return semaphore_;
         case RSP_REGISTERS_ADDRESS::RSP_PC:
@@ -103,118 +104,62 @@ u32 RSP::read_register(u32 address) const {
 void RSP::write_register(u32 address, u32 value) {
     switch (address) {
         case RSP_REGISTERS_ADDRESS::RSP_DMA_SPADDR:
-            dma_spaddr_ = value & 0x00001FF8;
+            dma_spaddr_.raw = value & 0x00001FF8;  // 8-byte aligned
             return;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RAMADDR:
-            dma_ramaddr_ = value & 0x00FFFFF8;
+            dma_ramaddr_.raw = value & 0x00FFFFF8;  // 8-byte aligned
             return;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RDLEN:
-            dma_rdlen_ = value & 0xFF8FFFF8;
+            dma_rdlen_.raw = value;
+            dma_.add_request(DMARequest(
+                true,                       // is_read: RDRAM -> SP
+                dma_spaddr_.bank,           // is_imem
+                dma_spaddr_.address,        // sp_address
+                dma_ramaddr_.address,       // rdram_address  
+                dma_rdlen_.length + 1,      // start_length
+                dma_rdlen_.count + 1,       // count
+                dma_rdlen_.skip             // skip
+            ));
             return;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_WRLEN:
-            dma_wrlen_ = value & 0xFF8FFFF8;
+            dma_wrlen_.raw = value;
+            dma_.add_request(DMARequest(
+                false,                      // is_read: SP -> RDRAM
+                dma_spaddr_.bank,           // is_imem
+                dma_spaddr_.address,        // sp_address
+                dma_ramaddr_.address,       // rdram_address
+                dma_wrlen_.length + 1,      // start_length
+                dma_wrlen_.count + 1,       // count
+                dma_wrlen_.skip             // skip
+            ));
             return;
         case RSP_REGISTERS_ADDRESS::RSP_STATUS: {
-            bool set_sig7 = get_bit(value, 24);
-            bool clr_sig7 = get_bit(value, 23);
-            bool set_sig6 = get_bit(value, 22);
-            bool clr_sig6 = get_bit(value, 21);
-            bool set_sig5 = get_bit(value, 20);
-            bool clr_sig5 = get_bit(value, 19);
-            bool set_sig4 = get_bit(value, 18);
-            bool clr_sig4 = get_bit(value, 17);
-            bool set_sig3 = get_bit(value, 16);
-            bool clr_sig3 = get_bit(value, 15);
-            bool set_sig2 = get_bit(value, 14);
-            bool clr_sig2 = get_bit(value, 13);
-            bool set_sig1 = get_bit(value, 12);
-            bool clr_sig1 = get_bit(value, 11);
-            bool set_sig0 = get_bit(value, 10);
-            bool clr_sig0 = get_bit(value, 9);
-            bool set_intbreak = get_bit(value, 8);
-            bool clr_intbreak = get_bit(value, 7);
-            bool set_sstep = get_bit(value, 6);
-            bool clr_sstep = get_bit(value, 5);
-            bool set_intr = get_bit(value, 4);
-            bool clr_intr = get_bit(value, 3);
-            bool clr_broke = get_bit(value, 2);
-            bool set_halt = get_bit(value, 1);
-            bool clr_halt = get_bit(value, 0);
-            if (set_sig7 && !clr_sig7) {
-                status_ = set_bit(status_, 14, true);
-            }
-            if (clr_sig7 && !set_sig7) {
-                status_ = set_bit(status_, 14, false);
-            }
-            if (set_sig6 && !clr_sig6) {
-                status_ = set_bit(status_, 13, true);
-            }
-            if (clr_sig6 && !set_sig6) {
-                status_ = set_bit(status_, 13, false);
-            }
-            if (set_sig5 && !clr_sig5) {
-                status_ = set_bit(status_, 12, true);
-            }
-            if (clr_sig5 && !set_sig5) {
-                status_ = set_bit(status_, 12, false);
-            }
-            if (set_sig4 && !clr_sig4) {
-                status_ = set_bit(status_, 11, true);
-            }
-            if (clr_sig4 && !set_sig4) {
-                status_ = set_bit(status_, 11, false);
-            }
-            if (set_sig3 && !clr_sig3) {
-                status_ = set_bit(status_, 10, true);
-            }
-            if (clr_sig3 && !set_sig3) {
-                status_ = set_bit(status_, 10, false);
-            }
-            if (set_sig2 && !clr_sig2) {
-                status_ = set_bit(status_, 9, true);
-            }
-            if (clr_sig2 && !set_sig2) {
-                status_ = set_bit(status_, 9, false);
-            }
-            if (set_sig1 && !clr_sig1) {
-                status_ = set_bit(status_, 8, true);
-            }
-            if (clr_sig1 && !set_sig1) {
-                status_ = set_bit(status_, 8, false);
-            }
-            if (set_sig0 && !clr_sig0) {
-                status_ = set_bit(status_, 7, true);
-            }
-            if (clr_sig0 && !set_sig0) {
-                status_ = set_bit(status_, 7, false);
-            }
-            if (set_intbreak && !clr_intbreak) {
-                status_ = set_bit(status_, 6, true);
-            }
-            if (clr_intbreak && !set_intbreak) {
-                status_ = set_bit(status_, 6, false);
-            }
-            if (set_sstep && !clr_sstep) {
-                status_ = set_bit(status_, 5, true);
-            }
-            if (clr_sstep && !set_sstep) {
-                status_ = set_bit(status_, 5, false);
-            }
-            if (set_intr && !clr_intr) {
-                mi_.set_interrupt(interfaces::MI_INTERRUPT_SP);
-            }
-            if (clr_intr && !set_intr) {
-                mi_.clear_interrupt(interfaces::MI_INTERRUPT_SP);
-            }
-            if (clr_broke) {
-                status_ = set_bit(status_, 1, false);
-            }
-            if (set_halt && !clr_halt) {
-                status_ = set_bit(status_, 0, true);
-            }
-            if (clr_halt && !set_halt) {
-                status_ = set_bit(status_, 0, false);
-            }
+            // clr/set pairs - if both set, no change
+            if (get_bit(value, 0) && !get_bit(value, 1)) status_.halt = 0;
+            if (get_bit(value, 1) && !get_bit(value, 0)) status_.halt = 1;
+            if (get_bit(value, 2)) status_.broke = 0;
+            if (get_bit(value, 3) && !get_bit(value, 4)) mi_.clear_interrupt(interfaces::MI_INTERRUPT_SP);
+            if (get_bit(value, 4) && !get_bit(value, 3)) mi_.set_interrupt(interfaces::MI_INTERRUPT_SP);
+            if (get_bit(value, 5) && !get_bit(value, 6)) status_.single_step = 0;
+            if (get_bit(value, 6) && !get_bit(value, 5)) status_.single_step = 1;
+            if (get_bit(value, 7) && !get_bit(value, 8)) status_.interrupt_on_break = 0;
+            if (get_bit(value, 8) && !get_bit(value, 7)) status_.interrupt_on_break = 1;
+            if (get_bit(value, 9) && !get_bit(value, 10)) status_.signal0 = 0;
+            if (get_bit(value, 10) && !get_bit(value, 9)) status_.signal0 = 1;
+            if (get_bit(value, 11) && !get_bit(value, 12)) status_.signal1 = 0;
+            if (get_bit(value, 12) && !get_bit(value, 11)) status_.signal1 = 1;
+            if (get_bit(value, 13) && !get_bit(value, 14)) status_.signal2 = 0;
+            if (get_bit(value, 14) && !get_bit(value, 13)) status_.signal2 = 1;
+            if (get_bit(value, 15) && !get_bit(value, 16)) status_.signal3 = 0;
+            if (get_bit(value, 16) && !get_bit(value, 15)) status_.signal3 = 1;
+            if (get_bit(value, 17) && !get_bit(value, 18)) status_.signal4 = 0;
+            if (get_bit(value, 18) && !get_bit(value, 17)) status_.signal4 = 1;
+            if (get_bit(value, 19) && !get_bit(value, 20)) status_.signal5 = 0;
+            if (get_bit(value, 20) && !get_bit(value, 19)) status_.signal5 = 1;
+            if (get_bit(value, 21) && !get_bit(value, 22)) status_.signal6 = 0;
+            if (get_bit(value, 22) && !get_bit(value, 21)) status_.signal6 = 1;
+            if (get_bit(value, 23) && !get_bit(value, 24)) status_.signal7 = 0;
+            if (get_bit(value, 24) && !get_bit(value, 23)) status_.signal7 = 1;
             return;
         }
         case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:
@@ -230,7 +175,12 @@ void RSP::write_register(u32 address, u32 value) {
 
 void RSP::execute_next_instruction()
 {
+    if (status_.halt) {
+        return;
+    }
+    
     auto instruction = fetch_instruction();
+    
     bool should_branch = delay_branch_pending_;
     u32 target = delay_pc_;
     delay_branch_pending_ = false;
@@ -240,6 +190,29 @@ void RSP::execute_next_instruction()
 
     if (should_branch) {
         pc_ = target;
+    }
+
+    if (status_.single_step) {
+        status_.halt = 1;
+    }
+}
+
+void RSP::process_passed_cycles(u32 cycles)
+{
+    // DMA i RSP rade paralelno
+    dma_.process_transfer(cycles);
+    
+    if (!status_.halt) {
+        // RSP radi na 2/3 brzine CPU-a
+        rsp_cycle_accumulator_ += cycles * (2.0f / 3.0f);
+        
+        while (rsp_cycle_accumulator_ >= 1.0f) {
+            rsp_cycle_accumulator_ -= 1.0f;
+            execute_next_instruction();
+            
+            // Proveri da li je RSP haltovan (BREAK)
+            if (status_.halt) break;
+        }
     }
 }
 
@@ -251,19 +224,23 @@ void RSP::delay_branch(u32 target)
 
 void RSP::set_breakpoint()
 {
-    status_ = set_bit(status_, 1, true);
+    status_.halt = 1;
+    status_.broke = 1;
+    if (status_.interrupt_on_break) {
+        mi_.set_interrupt(interfaces::MI_INTERRUPT_SP);
+    }
 }
 
 u32 RSP::read_cop0(u32 reg) const
 {
     switch (reg) {
-        case 0: return dma_spaddr_;
-        case 1: return dma_ramaddr_;
-        case 2: return dma_rdlen_;
-        case 3: return dma_wrlen_;
-        case 4: return status_;
-        case 5: return dma_full_;
-        case 6: return dma_busy_;
+        case 0: return dma_spaddr_.raw;
+        case 1: return dma_ramaddr_.raw;
+        case 2: return dma_rdlen_.raw;
+        case 3: return dma_wrlen_.raw;
+        case 4: return status_.raw;
+        case 5: return status_.dma_full;
+        case 6: return status_.dma_busy;
         case 7: return semaphore_;
         // RDP registers (8-15)
         case 8:  return rdp_.read_register(rdp::DPC_START);
@@ -281,10 +258,10 @@ u32 RSP::read_cop0(u32 reg) const
 void RSP::write_cop0(u32 reg, u32 value)
 {
     switch (reg) {
-        case 0: dma_spaddr_ = value & 0x00001FF8; break;
-        case 1: dma_ramaddr_ = value & 0x00FFFFF8; break;
-        case 2: dma_rdlen_ = value & 0xFF8FFFF8; break;
-        case 3: dma_wrlen_ = value & 0xFF8FFFF8; break;
+        case 0: write_register(RSP_DMA_SPADDR, value); break;  // 8-byte aligned
+        case 1: write_register(RSP_DMA_RAMADDR, value); break; // 8-byte aligned
+        case 2: write_register(RSP_DMA_RDLEN, value); break;  // triggers DMA
+        case 3: write_register(RSP_DMA_WRLEN, value); break;  // triggers DMA
         case 4: write_register(RSP_STATUS, value); break;
         case 7: semaphore_ = value & 0x00000001; break;
         // RDP registers (8-15)

@@ -17,10 +17,30 @@
 
 namespace n64::memory {
 
+// Forward declarations for component references
+class RDRAM;
+class ROM;
+class PIF;
+
+// MemoryMap is now a lightweight router that routes memory accesses
+// to the appropriate component. It does NOT own any components.
 class MemoryMap {
 public:
-    MemoryMap(const std::string& rom_path);
-    ~MemoryMap();
+    MemoryMap(
+        RDRAM& rdram,
+        ROM& rom,
+        interfaces::MI& mi,
+        rdp::RDP& rdp,
+        rcp::RSP& rsp,
+        interfaces::AI& ai,
+        interfaces::VI& vi,
+        interfaces::SI& si,
+        interfaces::RI& ri,
+        interfaces::PI& pi,
+        PIF& pif
+    );
+    
+    ~MemoryMap() = default;
 
     template<typename T>
     [[nodiscard]] T read(u32 address);
@@ -28,20 +48,19 @@ public:
     template<typename T>
     void write(u32 address, T value);
 
-    u32 boot();
-
 private:
-    RDRAM rdram_;
-    ROM rom_;
-    interfaces::MI mi_;
-    rdp::RDP rdp_;
-    rcp::RSP rsp_;
-    interfaces::AI ai_;
-    interfaces::VI vi_;
-    interfaces::SI si_;
-    interfaces::RI ri_;
-    interfaces::PI pi_;
-    PIF pif_;
+    // References to components (not owned)
+    RDRAM& rdram_;
+    ROM& rom_;
+    interfaces::MI& mi_;
+    rdp::RDP& rdp_;
+    rcp::RSP& rsp_;
+    interfaces::AI& ai_;
+    interfaces::VI& vi_;
+    interfaces::SI& si_;
+    interfaces::RI& ri_;
+    interfaces::PI& pi_;
+    PIF& pif_;
 };
 
 }

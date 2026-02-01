@@ -70,4 +70,24 @@ u16 VU::get_vt_element(u32 vt, u32 lane, u32 e) const
     }
 }
 
+void VU::init_reciprocal_table_()
+{
+    reciprocal_table_[0] = 0xFFFF;
+    for (u32 i = 1; i < 512; i++) {
+        u64 a = i + 512;
+        u64 b = ((u64)1 << 34) / a;
+        reciprocal_table_[i] = (u16)((b + 1) >> 8);
+    }
+}
+
+void VU::init_square_root_table_()
+{
+    for (u32 i = 0; i < 512; i++) {
+        u64 a = (i + 512) >> (i % 2 == 1 ? 1 : 0);
+        u64 b = 1 << 17;
+        while (a * (b + 1) * (b + 1) < ((u64)1 << 44)) b++;
+        square_root_table_[i] = (u16)(b >> 1);
+    }
+}
+
 } // namespace n64::rcp

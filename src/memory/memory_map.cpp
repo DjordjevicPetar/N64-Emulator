@@ -1,48 +1,34 @@
 #include "memory_map.hpp"
 #include <stdexcept>
-#include <algorithm>
+#include <string>
 
 namespace n64::memory {
 
-MemoryMap::MemoryMap(const std::string& rom_path)
-    : rdram_()
-    , rom_(pi_, rom_path)
-    , mi_()
-    , rdp_()
-    , rsp_(mi_, rdp_)
-    , ai_(mi_)
-    , vi_(mi_)
-    , si_(mi_)
-    , ri_()
-    , pi_()
-    , pif_()
+MemoryMap::MemoryMap(
+    RDRAM& rdram,
+    ROM& rom,
+    interfaces::MI& mi,
+    rdp::RDP& rdp,
+    rcp::RSP& rsp,
+    interfaces::AI& ai,
+    interfaces::VI& vi,
+    interfaces::SI& si,
+    interfaces::RI& ri,
+    interfaces::PI& pi,
+    PIF& pif
+)
+    : rdram_(rdram)
+    , rom_(rom)
+    , mi_(mi)
+    , rdp_(rdp)
+    , rsp_(rsp)
+    , ai_(ai)
+    , vi_(vi)
+    , si_(si)
+    , ri_(ri)
+    , pi_(pi)
+    , pif_(pif)
 {
-}
-
-MemoryMap::~MemoryMap()
-{
-}
-
-u32 MemoryMap::boot()
-{
-    u32 entry_point = rom_.parse_header();
-    
-    // Simulate what IPL3 bootcode does:
-    // Copy game code from ROM to RDRAM
-    // ROM offset 0x1000 (after header + bootcode) -> RDRAM at entry point
-    
-    constexpr u32 ROM_CODE_OFFSET = 0x1000;  // After header (0x40) and bootcode (0xFC0)
-    u32 rdram_dest = entry_point & 0x1FFFFFFF;  // Convert KSEG0/1 to physical
-    
-    // Calculate how much to copy (ROM size minus header, limited to RDRAM size)
-    size_t copy_size = std::min(rom_.size() - ROM_CODE_OFFSET, 
-                                static_cast<size_t>(RDRAM_MEMORY_SIZE - rdram_dest));
-    
-    for (size_t i = 0; i < copy_size; ++i) {
-        rdram_.write_memory<u8>(rdram_dest + i, rom_.read<u8>(ROM_START_ADDRESS + ROM_CODE_OFFSET + i));
-    }
-    
-    return entry_point;
 }
 
 template<typename T>
@@ -102,8 +88,6 @@ T MemoryMap::read(u32 address)
     if (address >= PIF_START_ADDRESS && address <= PIF_END_ADDRESS) {
         return pif_.read<T>(address);
     }
-    
-    // TODO: Add other memory regions (RSP, RDP, MI, VI, AI, RI, SI)
     
     throw std::runtime_error("Unmapped memory read at address: " + std::to_string(address));
 }
@@ -170,8 +154,6 @@ void MemoryMap::write(u32 address, T value)
         pif_.write<T>(address, value);
         return;
     }
-    
-    // TODO: Add other memory regions (ROM, RSP, RDP, MI, VI, AI, RI, SI)
     
     throw std::runtime_error("Unmapped memory write at address: " + std::to_string(address));
 }

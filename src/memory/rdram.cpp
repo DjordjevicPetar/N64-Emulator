@@ -5,7 +5,7 @@
 namespace n64::memory {
 
 RDRAM::RDRAM()
-    : memory_(RDRAM_MEMORY_SIZE, 0)
+    : memory_(RDRAM_MEMORY_SIZE, 0)  // Allocate 8MB on heap
 {
     device_type_ = 0;
     device_id_ = 0;
