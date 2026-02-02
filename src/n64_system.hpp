@@ -12,7 +12,7 @@
 // Interfaces
 #include "interfaces/mi.hpp"
 #include "interfaces/ai.hpp"
-#include "interfaces/vi.hpp"
+#include "interfaces/vi/vi.hpp"
 #include "interfaces/si.hpp"
 #include "interfaces/ri.hpp"
 #include "interfaces/pi.hpp"

@@ -3,6 +3,27 @@
 #include "cp0.hpp"
 #include <climits>
 
+// TODO: CPU instruction implementation needs work:
+// 
+// MISSING INSTRUCTIONS:
+// TODO: Implement full FPU instruction set (~40 instructions) - LWC1, SWC1, FPU arithmetic
+// TODO: Implement trap instructions with exception generation (TGE, TLT, TEQ, etc.)
+// TODO: Implement TLB instructions (TLBR, TLBWI, TLBWR, TLBP)
+// TODO: Implement CACHE instruction with actual cache operations
+//
+// EXCEPTION HANDLING:
+// TODO: Implement overflow exception for ADDI, ADD, SUB, DADDI, DADD, DSUB
+// TODO: Implement address error exceptions for unaligned memory access
+// TODO: Implement TLB miss exceptions
+// TODO: Implement SYSCALL and BREAK exceptions properly
+// TODO: Implement exception framework (save EPC, set CAUSE, update STATUS)
+//
+// CYCLE ACCURACY:
+// TODO: Verify cycle counts for all instructions
+// TODO: Add memory access latency cycles (cache hit/miss)
+// TODO: Implement pipeline stalls for multiply/divide (MULT=3, DIV=35, etc.)
+// TODO: Branch taken vs not taken may have different cycle counts
+
 namespace n64::cpu {
 
 // ============================================================================

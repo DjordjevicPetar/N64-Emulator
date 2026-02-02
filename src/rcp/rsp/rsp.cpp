@@ -4,6 +4,13 @@
 #include <stdexcept>
 #include <string>
 
+// TODO: RSP needs work on cycle accuracy:
+// TODO: Verify exact CPU-to-RSP cycle ratio (2/3) - current float accumulation may drift
+// TODO: DMA should run in parallel with RSP execution, not sequentially
+// TODO: Many VU instructions may take multiple cycles - verify cycle counts
+// TODO: Verify RSP halt/unhalt timing behavior
+// TODO: Implement RSP breakpoint behavior more accurately
+
 namespace n64::rcp {
 
 RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp, memory::RDRAM& rdram)

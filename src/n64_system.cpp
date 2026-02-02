@@ -12,7 +12,7 @@ N64System::N64System(const std::string& rom_path)
     , rdp_()
     , rsp_(mi_, rdp_, rdram_)
     , ai_(mi_)
-    , vi_(mi_)
+    , vi_(mi_, rdram_)
     , si_(mi_)
     , pif_()
     , memory_map_(rdram_, rom_, mi_, rdp_, rsp_, ai_, vi_, si_, ri_, pi_, pif_)
@@ -52,9 +52,10 @@ u32 N64System::boot()
 
 void N64System::run()
 {
-    while (true) {
+    while (vi_.handle_events()) {
         u32 cycles = cpu_.execute_next_instruction();
         rsp_.process_passed_cycles(cycles);
+        vi_.process_passed_cycles(cycles);
     }
 }
 

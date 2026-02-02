@@ -56,6 +56,7 @@ u32 PI::read_register(u32 address) const {
 }
 
 void PI::write_register(u32 address, u32 value) {
+    // TODO: PI DMA is completely unimplemented - critical for loading game data!
     switch (address) {
         case PI_REGISTERS_ADDRESS::PI_DRAM_ADDR:
             dram_addr_ = value & 0x00FFFFFE;
@@ -65,13 +66,22 @@ void PI::write_register(u32 address, u32 value) {
             break;
         case PI_REGISTERS_ADDRESS::PI_RD_LEN:
             rd_len_ = value & 0x00FFFFFF;
+            // TODO: Trigger read DMA from ROM (cart_addr) to RDRAM (dram_addr)
+            // TODO: Set PI_STATUS busy bit during transfer
+            // TODO: Generate PI interrupt when DMA completes
+            // TODO: Implement DMA timing based on BSD domain settings
             break;
         case PI_REGISTERS_ADDRESS::PI_WR_LEN:
             wr_len_ = value & 0x00FFFFFF;
+            // TODO: Trigger write DMA from RDRAM (dram_addr) to ROM/SRAM (cart_addr)
+            // TODO: Handle writes to cartridge SRAM/FlashRAM
             break;
         case PI_REGISTERS_ADDRESS::PI_STATUS:
-            // TODO: Fix PI_STATUS
-            status_ = value & 0x0000000F;
+            // TODO: PI_STATUS is mostly read-only; writing should only clear interrupt/error bits
+            // Bit 0: Reset DMA controller, Bit 1: Clear interrupt
+            if (value & 0x02) {
+                // TODO: Clear PI interrupt via MI
+            }
             break;
         case PI_REGISTERS_ADDRESS::PI_BSD_DOM1_LAT:
             bsd_dom1_lat_ = value & 0x000000FF;

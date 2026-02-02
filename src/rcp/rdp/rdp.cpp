@@ -5,6 +5,18 @@
 
 namespace n64::rdp {
 
+// TODO: The RDP is almost entirely unimplemented. Major work needed:
+// TODO: Implement RDP command FIFO processing
+// TODO: Implement RDP rendering pipeline (triangle setup, rasterization)
+// TODO: Implement RDP texture mapping and TMEM management
+// TODO: Implement RDP color combiner (configurable per-pixel color math)
+// TODO: Implement RDP blender (alpha blending, fog, coverage)
+// TODO: Implement RDP Z-buffer handling
+// TODO: Implement RDP span buffer rendering
+// TODO: Implement cycle-accurate RDP timing
+// TODO: Generate DP interrupt when command buffer completes
+// TODO: Parse and execute all RDP commands (Set_*, Triangle, Rectangle, etc.)
+
 RDP::RDP()
     : start_(0)
     , end_(0)
@@ -56,9 +68,12 @@ void RDP::write_register(u32 address, u32 value) {
     switch (address) {
         case RDP_REGISTERS_ADDRESS::DPC_START:
             start_ = value & 0x00FFFFFF;
+            // TODO: Writing DPC_START should set the command buffer start address
             break;
         case RDP_REGISTERS_ADDRESS::DPC_END:
             end_ = value & 0x00FFFFFF;
+            // TODO: Writing DPC_END should trigger RDP command processing
+            // TODO: Parse commands from start_ to end_ and execute them
             break;
         case RDP_REGISTERS_ADDRESS::DPC_STATUS: {
             bool clr_clock = get_bit(value, 9);

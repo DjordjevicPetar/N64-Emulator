@@ -46,21 +46,29 @@ u32 SI::read_register(u32 address) const {
 }
 
 void SI::write_register(u32 address, u32 value) {
+    // TODO: SI DMA is completely unimplemented - critical for controller input!
     switch (address) {
         case SI_REGISTERS_ADDRESS::SI_DRAM_ADDR:
             dram_addr_ = value & 0x00FFFFFF;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD64B:
             pif_ad_rd64b_ = value & 0x000007FC;
+            // TODO: Trigger 64-byte DMA read from PIF RAM to RDRAM
+            // TODO: Set SI_STATUS busy bit during transfer
+            // TODO: Generate SI interrupt when DMA completes
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR4B:
             pif_ad_wr4b_ = value;
+            // TODO: Trigger 4-byte DMA write from RDRAM to PIF RAM
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR64B:
             pif_ad_wr64b_ = value;
+            // TODO: Trigger 64-byte DMA write from RDRAM to PIF RAM
+            // TODO: This triggers PIF command processing (controller polling, etc.)
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD4B:
             pif_ad_rd4b_ = value;
+            // TODO: Trigger 4-byte DMA read from PIF RAM to RDRAM
             break;
         case SI_REGISTERS_ADDRESS::SI_STATUS:
             // Writing any value clears SI interrupt
