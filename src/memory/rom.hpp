@@ -5,7 +5,7 @@
 
 #include "../utils/types.hpp"
 #include "memory_constants.hpp"
-#include "../interfaces/pi.hpp"
+#include "../interfaces/pi/pi.hpp"
 
 namespace n64::memory {
 

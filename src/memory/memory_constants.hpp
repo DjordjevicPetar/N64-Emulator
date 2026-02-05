@@ -64,7 +64,17 @@ constexpr u32 RI_END_ADDRESS = 0x047FFFFF;
 constexpr u32 SI_START_ADDRESS = 0x04800000;
 constexpr u32 SI_END_ADDRESS = 0x048FFFFF;
 
-// ROM Memory Constants
+// PI External Bus Domains (for BSD timing)
+constexpr u32 PI_DOM2_ADDR1_START = 0x05000000;  // 64DD registers
+constexpr u32 PI_DOM2_ADDR1_END   = 0x05FFFFFF;
+
+constexpr u32 PI_DOM1_ADDR1_START = 0x06000000;  // 64DD ROM
+constexpr u32 PI_DOM1_ADDR1_END   = 0x07FFFFFF;
+
+constexpr u32 PI_DOM2_ADDR2_START = 0x08000000;  // SRAM
+constexpr u32 PI_DOM2_ADDR2_END   = 0x0FFFFFFF;
+
+// ROM Memory Constants (Domain 1)
 constexpr u32 ROM_START_ADDRESS = 0x10000000;
 constexpr u32 ROM_END_ADDRESS = 0x1FBFFFFF;
 

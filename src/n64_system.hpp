@@ -15,7 +15,7 @@
 #include "interfaces/vi/vi.hpp"
 #include "interfaces/si.hpp"
 #include "interfaces/ri.hpp"
-#include "interfaces/pi.hpp"
+#include "interfaces/pi/pi.hpp"
 
 // RCP
 #include "rcp/rdp/rdp.hpp"
@@ -50,8 +50,8 @@ private:
     memory::RDRAM rdram_;
     
     // Interfaces (some need MI for interrupts)
+    interfaces::MI mi_;  // MI must be before PI, AI, SI, VI
     interfaces::PI pi_;
-    interfaces::MI mi_;
     interfaces::RI ri_;
     
     // ROM (needs PI)

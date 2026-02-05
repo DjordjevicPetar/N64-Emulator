@@ -5,8 +5,8 @@ namespace n64 {
 
 N64System::N64System(const std::string& rom_path)
     : rdram_()
-    , pi_()
     , mi_()
+    , pi_(mi_)
     , ri_()
     , rom_(pi_, rom_path)
     , rdp_()
@@ -18,6 +18,9 @@ N64System::N64System(const std::string& rom_path)
     , memory_map_(rdram_, rom_, mi_, rdp_, rsp_, ai_, vi_, si_, ri_, pi_, pif_)
     , cpu_(memory_map_)
 {
+    // Connect PI to ROM and RDRAM for DMA transfers
+    pi_.set_dma_targets(rom_, rdram_);
+    
     // Boot the system
     u32 pc_address = boot();
     cpu_.set_pc(pc_address);
@@ -56,6 +59,7 @@ void N64System::run()
         u32 cycles = cpu_.execute_next_instruction();
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
+        pi_.process_passed_cycles(cycles);
     }
 }
 
