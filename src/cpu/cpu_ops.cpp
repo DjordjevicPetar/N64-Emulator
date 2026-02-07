@@ -337,7 +337,9 @@ u32 LL(VR4300& cpu, const Instruction& instr) {
     u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend32(value));
     cpu.set_LLbit(true);
-    cpu.cp0().set_reg(CP0Reg::LL_ADDR, cpu.cp0().translate_address(address));
+    // LL_ADDR stores physical address >> 4 (cache line granularity)
+    u32 paddr = cpu.cp0().translate_address(address);
+    cpu.cp0().set_reg(CP0Reg::LL_ADDR, paddr >> 4);
     return 1;
 }
 
@@ -346,7 +348,9 @@ u32 LLD(VR4300& cpu, const Instruction& instr) {
     u64 value = cpu.read_memory<u64>(address);
     cpu.set_gpr(instr.i_type.rt, value);
     cpu.set_LLbit(true);
-    cpu.cp0().set_reg(CP0Reg::LL_ADDR, cpu.cp0().translate_address(address));
+    // LL_ADDR stores physical address >> 4 (cache line granularity)
+    u32 paddr = cpu.cp0().translate_address(address);
+    cpu.cp0().set_reg(CP0Reg::LL_ADDR, paddr >> 4);
     return 1;
 }
 
@@ -469,10 +473,10 @@ u32 SDR(VR4300& cpu, const Instruction& instr) {
 
 u32 SC(VR4300& cpu, const Instruction& instr) {
     u64 vaddr = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u32 paddr = cpu.cp0().translate_address(vaddr);
-    u32 ll_addr = static_cast<u32>(cpu.cp0().get_reg(CP0Reg::LL_ADDR));
     
-    bool success = cpu.get_LLbit() && (ll_addr == paddr);
+    // On N64 (single-processor), SC only checks LLbit, not address
+    // Address comparison is handled by cache coherency on multi-processor systems
+    bool success = cpu.get_LLbit();
     if (success) {
         cpu.write_memory<u32>(vaddr, static_cast<u32>(cpu.gpr(instr.i_type.rt)));
     }
@@ -483,10 +487,9 @@ u32 SC(VR4300& cpu, const Instruction& instr) {
 
 u32 SCD(VR4300& cpu, const Instruction& instr) {
     u64 vaddr = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    u32 paddr = cpu.cp0().translate_address(vaddr);
-    u32 ll_addr = static_cast<u32>(cpu.cp0().get_reg(CP0Reg::LL_ADDR));
     
-    bool success = cpu.get_LLbit() && (ll_addr == paddr);
+    // On N64 (single-processor), SCD only checks LLbit, not address
+    bool success = cpu.get_LLbit();
     if (success) {
         cpu.write_memory<u64>(vaddr, cpu.gpr(instr.i_type.rt));
     }
@@ -497,22 +500,78 @@ u32 SCD(VR4300& cpu, const Instruction& instr) {
 
 // FPU Load/Store
 u32 LWC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if ((address & 0x3) != 0) {
+        // TODO: Address error exception
+        return 1;
+    }
+    u32 value = cpu.read_memory<u32>(address);
+    u8 ft = instr.i_type.rt;
+    
+    if (cpu.cp0().get_fr_bit()) {
+        // FR=1: each register is independent 64-bit, sign-extend 32-bit value
+        cpu.cp1().set_fpr_64(ft, sign_extend32(value));
+    } else {
+        // FR=0: even/odd pairs share physical register
+        // set_fpr_32 handles the mapping automatically
+        cpu.cp1().set_fpr_32(ft, value);
+    }
     return 1;
 }
 
 u32 LDC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if ((address & 0x7) != 0) {
+        // TODO: Address error exception
+        return 1;
+    }
+    u64 value = cpu.read_memory<u64>(address);
+    u8 ft = instr.i_type.rt;
+    
+    if (!cpu.cp0().get_fr_bit() && (ft & 1) == 1) {
+        // FR=0, odd register: undefined behavior for 64-bit loads
+        // TODO: Reserved instruction exception
+        return 1;
+    }
+    // FR=0 even register or FR=1 any register: store full 64 bits
+    cpu.cp1().set_fpr_64(ft, value);
     return 1;
 }
 
 u32 SWC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if ((address & 0x3) != 0) {
+        // TODO: Address error exception
+        return 1;
+    }
+    u8 ft = instr.i_type.rt;
+    
+    if (cpu.cp0().get_fr_bit()) {
+        // FR=1: each register is independent 64-bit, sign-extend 32-bit value
+        cpu.write_memory<u32>(address, static_cast<u32>(cpu.cp1().get_fpr_64(ft)));
+    } else {
+        // FR=0: even/odd pairs share physical register
+        // set_fpr_32 handles the mapping automatically
+        cpu.write_memory<u32>(address, cpu.cp1().get_fpr_32(ft));
+    }
     return 1;
 }
 
 u32 SDC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if ((address & 0x7) != 0) {
+        // TODO: Address error exception
+        return 1;
+    }
+    u8 ft = instr.i_type.rt;
+    
+    if (!cpu.cp0().get_fr_bit() && (ft & 1) == 1) {
+        // FR=0, odd register: undefined behavior for 64-bit loads
+        // TODO: Reserved instruction exception
+        return 1;
+    }
+    // FR=0 even register or FR=1 any register: store full 64 bits
+    cpu.write_memory<u64>(address, cpu.cp1().get_fpr_64(ft));
     return 1;
 }
 
@@ -1091,32 +1150,83 @@ u32 BC0TL(VR4300& cpu, const Instruction& instr) {
 
 // Move from/to CP1
 u32 MFC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
-    return 1;
+    u8 rt = instr.r_type.rt;
+    u8 fs = instr.r_type.rd;
+    
+    u32 value;
+    if (cpu.cp0().get_fr_bit()) {
+        // FR=1: each register is independent 64-bit
+        value = static_cast<u32>(cpu.cp1().get_fpr_64(fs));
+    } else {
+        // FR=0: even/odd pairs share physical register
+        value = cpu.cp1().get_fpr_32(fs);
+    }
+    // Sign-extend 32-bit value to 64-bit GPR
+    cpu.set_gpr(rt, sign_extend32(value));
+    return 2;
 }
 
 u32 DMFC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
-    return 1;
+    u8 rt = instr.r_type.rt;
+    u8 fs = instr.r_type.rd;
+    
+    if (!cpu.cp0().get_fr_bit() && (fs & 1) == 1) {
+        // FR=0, odd register: undefined behavior for 64-bit operations
+        // TODO: Reserved instruction exception
+        return 1;
+    }
+    // FR=0 even register or FR=1 any register: move full 64 bits
+    cpu.set_gpr(rt, cpu.cp1().get_fpr_64(fs));
+    return 2;
 }
 
 u32 CFC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 rt = instr.r_type.rt;
+    u8 fs = instr.r_type.rd;
+
+    // Sign-extend 32-bit FCR value to 64-bit GPR
+    cpu.set_gpr(rt, sign_extend32(cpu.cp1().get_fcr(fs)));
+
     return 1;
 }
 
 u32 MTC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
-    return 1;
+    u8 rt = instr.r_type.rt;
+    u8 fs = instr.r_type.rd;
+    
+    // Take lower 32 bits of GPR
+    u32 value = static_cast<u32>(cpu.gpr(rt));
+    if (cpu.cp0().get_fr_bit()) {
+        // FR=1: each register is independent 64-bit, store as sign-extended
+        cpu.cp1().set_fpr_64(fs, sign_extend32(value));
+    } else {
+        // FR=0: even/odd pairs share physical register
+        cpu.cp1().set_fpr_32(fs, value);
+    }
+    return 2;
 }
 
 u32 DMTC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
-    return 1;
+    u8 rt = instr.r_type.rt;
+    u8 fs = instr.r_type.rd;
+    
+    if (!cpu.cp0().get_fr_bit() && (fs & 1) == 1) {
+        // FR=0, odd register: undefined behavior for 64-bit operations
+        // TODO: Reserved instruction exception
+        return 1;
+    }
+    // FR=0 even register or FR=1 any register: move full 64 bits
+    cpu.cp1().set_fpr_64(fs, cpu.gpr(rt));
+    return 2;
 }
 
 u32 CTC1(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 rt = instr.r_type.rt;
+    u8 fs = instr.r_type.rd;
+    
+    cpu.cp1().set_fcr(fs, cpu.gpr(rt));
+
+    // TODO: Enable exceptions for written bits
     return 1;
 }
 
@@ -1173,7 +1283,25 @@ u32 ABS_FMT(VR4300& cpu, const Instruction& instr) {
 }
 
 u32 MOV_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+    
+    if (fmt == 16) {
+        // MOV.S - single precision (32-bit)
+        if (cpu.cp0().get_fr_bit()) {
+            cpu.cp1().set_fpr_64(fd, cpu.cp1().get_fpr_64(fs));
+        } else {
+            cpu.cp1().set_fpr_32(fd, cpu.cp1().get_fpr_32(fs));
+        }
+    } else if (fmt == 17) {
+        // MOV.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // FR=0, odd register: undefined
+            return 1;
+        }
+        cpu.cp1().set_fpr_64(fd, cpu.cp1().get_fpr_64(fs));
+    }
     return 1;
 }
 

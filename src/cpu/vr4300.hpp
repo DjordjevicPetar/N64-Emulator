@@ -7,6 +7,7 @@
 #include "instruction.hpp"
 #include "instruction_table.hpp"
 #include "cp0.hpp"
+#include "cp1.hpp"
 
 namespace n64::cpu {
 
@@ -38,6 +39,10 @@ public:
     [[nodiscard]] CP0& cp0() { return cp0_; }
     [[nodiscard]] const CP0& cp0() const { return cp0_; }
 
+    // CP1 (FPU) access
+    [[nodiscard]] CP1& cp1() { return cp1_; }
+    [[nodiscard]] const CP1& cp1() const { return cp1_; }
+
     // Memory access
     template <typename T>
     [[nodiscard]] T read_memory(u64 address) const;
@@ -57,6 +62,7 @@ private:
     InstructionTable instruction_table_;
     Instruction current_instruction_{0};
     CP0 cp0_;
+    CP1 cp1_;
 
     // Branch delay slot
     bool branch_pending_ = false;
