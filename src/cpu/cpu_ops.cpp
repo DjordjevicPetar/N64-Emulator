@@ -2,6 +2,8 @@
 #include "vr4300.hpp"
 #include "cp0.hpp"
 #include <climits>
+#include <cmath>
+#include <cfenv>
 
 // TODO: CPU instruction implementation needs work:
 // 
@@ -527,13 +529,6 @@ u32 LDC1(VR4300& cpu, const Instruction& instr) {
     }
     u64 value = cpu.read_memory<u64>(address);
     u8 ft = instr.i_type.rt;
-    
-    if (!cpu.cp0().get_fr_bit() && (ft & 1) == 1) {
-        // FR=0, odd register: undefined behavior for 64-bit loads
-        // TODO: Reserved instruction exception
-        return 1;
-    }
-    // FR=0 even register or FR=1 any register: store full 64 bits
     cpu.cp1().set_fpr_64(ft, value);
     return 1;
 }
@@ -564,14 +559,13 @@ u32 SDC1(VR4300& cpu, const Instruction& instr) {
         return 1;
     }
     u8 ft = instr.i_type.rt;
-    
-    if (!cpu.cp0().get_fr_bit() && (ft & 1) == 1) {
-        // FR=0, odd register: undefined behavior for 64-bit loads
-        // TODO: Reserved instruction exception
-        return 1;
+    if (cpu.cp0().get_fr_bit()) {
+        cpu.write_memory<u64>(address, cpu.cp1().get_fpr_64(ft));
+    } else if ((ft & 1) == 0) {
+        u64 value = static_cast<u64>(cpu.cp1().get_fpr_32(ft + 1)) << 32;
+        value |= static_cast<u64>(cpu.cp1().get_fpr_32(ft));
+        cpu.write_memory<u64>(address, value);
     }
-    // FR=0 even register or FR=1 any register: store full 64 bits
-    cpu.write_memory<u64>(address, cpu.cp1().get_fpr_64(ft));
     return 1;
 }
 
@@ -1173,7 +1167,6 @@ u32 DMFC1(VR4300& cpu, const Instruction& instr) {
     if (!cpu.cp0().get_fr_bit() && (fs & 1) == 1) {
         // FR=0, odd register: undefined behavior for 64-bit operations
         // TODO: Reserved instruction exception
-        return 1;
     }
     // FR=0 even register or FR=1 any register: move full 64 bits
     cpu.set_gpr(rt, cpu.cp1().get_fpr_64(fs));
@@ -1213,7 +1206,6 @@ u32 DMTC1(VR4300& cpu, const Instruction& instr) {
     if (!cpu.cp0().get_fr_bit() && (fs & 1) == 1) {
         // FR=0, odd register: undefined behavior for 64-bit operations
         // TODO: Reserved instruction exception
-        return 1;
     }
     // FR=0 even register or FR=1 any register: move full 64 bits
     cpu.cp1().set_fpr_64(fs, cpu.gpr(rt));
@@ -1232,53 +1224,200 @@ u32 CTC1(VR4300& cpu, const Instruction& instr) {
 
 // COP1 Branch
 u32 BC1F(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // Branch if FPU condition bit is false
+    if (!cpu.cp1().get_condition_bit()) {
+        u64 offset = sign_extend16(instr.i_type.immediate) << 2;
+        cpu.delay_branch(cpu.pc() + offset);
+    }
     return 1;
 }
 
 u32 BC1T(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // Branch if FPU condition bit is true
+    if (cpu.cp1().get_condition_bit()) {
+        u64 offset = sign_extend16(instr.i_type.immediate) << 2;
+        cpu.delay_branch(cpu.pc() + offset);
+    }
     return 1;
 }
 
 u32 BC1FL(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // Branch if FPU condition bit is false (likely - nullify delay slot if not taken)
+    if (!cpu.cp1().get_condition_bit()) {
+        u64 offset = sign_extend16(instr.i_type.immediate) << 2;
+        cpu.delay_branch(cpu.pc() + offset);
+    } else {
+        cpu.set_pc(cpu.pc() + 4);  // Skip delay slot
+    }
     return 1;
 }
 
 u32 BC1TL(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // Branch if FPU condition bit is true (likely - nullify delay slot if not taken)
+    if (cpu.cp1().get_condition_bit()) {
+        u64 offset = sign_extend16(instr.i_type.immediate) << 2;
+        cpu.delay_branch(cpu.pc() + offset);
+    } else {
+        cpu.set_pc(cpu.pc() + 4);  // Skip delay slot
+    }
     return 1;
 }
 
 // FPU Arithmetic (format determined by rs field)
 u32 ADD_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement - check instr.i_type.rs for format (S/D)
-    return 1;
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+    u8 ft = instr.cop1_type.ft;
+    // TODO: FPU exceptions - check for overflow, underflow, inexact, invalid (NaN operands)
+    if (fmt == 16) {
+        // ADD.S - single precision (32-bit)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        f32 result = f1 + f2;
+        cpu.cp1().set_fpr_single(fd, result);
+    } else if (fmt == 17) {
+        // ADD.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        f64 result = f1 + f2;
+        cpu.cp1().set_fpr_double(fd, result);
+    }
+    return 3;
 }
 
 u32 SUB_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
-    return 1;
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+    u8 ft = instr.cop1_type.ft;
+
+    // TODO: FPU exceptions - check for overflow, underflow, inexact, invalid (NaN operands)
+    if (fmt == 16) {
+        // SUB.S - single precision (32-bit)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        f32 result = f1 - f2;
+        cpu.cp1().set_fpr_single(fd, result);
+    } else if (fmt == 17) {
+        // SUB.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        f64 result = f1 - f2;
+        cpu.cp1().set_fpr_double(fd, result);
+    }
+    return 3;
 }
 
 u32 MUL_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+    u8 ft = instr.cop1_type.ft;
+
+    // TODO: FPU exceptions - check for overflow, underflow, inexact, invalid (NaN/Inf * 0)
+    if (fmt == 16) {
+        // MUL.S - single precision (32-bit)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        f32 result = f1 * f2;
+        cpu.cp1().set_fpr_single(fd, result);
+        return 5;
+    } else if (fmt == 17) {
+        // MUL.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        f64 result = f1 * f2;
+        cpu.cp1().set_fpr_double(fd, result);
+        return 8;
+    }
     return 1;
 }
 
 u32 DIV_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+    u8 ft = instr.cop1_type.ft;
+
+    // TODO: FPU exceptions - check for divide by zero, overflow, underflow, inexact, invalid (0/0, Inf/Inf)
+    if (fmt == 16) {
+        // DIV.S - single precision (32-bit)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        f32 result = f1 / f2;
+        cpu.cp1().set_fpr_single(fd, result);
+        return 29;
+    } else if (fmt == 17) {
+        // DIV.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        f64 result = f1 / f2;
+        cpu.cp1().set_fpr_double(fd, result);
+        return 58;
+    }
     return 1;
 }
 
 u32 SQRT_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for invalid (negative operand), inexact
+    if (fmt == 16) {
+        // SQRT.S - single precision (32-bit)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        // TODO: if (f1 < 0) raise invalid operation exception
+        f32 result = std::sqrt(f1);
+        cpu.cp1().set_fpr_single(fd, result);
+        return 29;
+    } else if (fmt == 17) {
+        // SQRT.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        // TODO: if (f1 < 0) raise invalid operation exception
+        f64 result = std::sqrt(f1);
+        cpu.cp1().set_fpr_double(fd, result);
+        return 58;
+    }
     return 1;
 }
 
 u32 ABS_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // ABS does not generate arithmetic exceptions (just clears sign bit)
+    if (fmt == 16) {
+        // ABS.S - single precision (32-bit)
+        u32 bits = cpu.cp1().get_fpr_32(fs);
+        bits = bits & 0x7FFFFFFF;  // Clear sign bit
+        cpu.cp1().set_fpr_32(fd, bits);
+    } else if (fmt == 17) {
+        // ABS.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        u64 bits = cpu.cp1().get_fpr_64(fs);
+        bits = bits & 0x7FFFFFFFFFFFFFFFULL;  // Clear sign bit
+        cpu.cp1().set_fpr_64(fd, bits);
+    }
     return 1;
 }
 
@@ -1298,7 +1437,6 @@ u32 MOV_FMT(VR4300& cpu, const Instruction& instr) {
         // MOV.D - double precision (64-bit)
         if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
             // FR=0, odd register: undefined
-            return 1;
         }
         cpu.cp1().set_fpr_64(fd, cpu.cp1().get_fpr_64(fs));
     }
@@ -1306,151 +1444,778 @@ u32 MOV_FMT(VR4300& cpu, const Instruction& instr) {
 }
 
 u32 NEG_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // NEG does not generate arithmetic exceptions (just flips sign bit)
+    if (fmt == 16) {
+        // NEG.S - single precision (32-bit)
+        u32 bits = cpu.cp1().get_fpr_32(fs);
+        bits = bits ^ 0x80000000;  // Flip sign bit
+        cpu.cp1().set_fpr_32(fd, bits);
+    } else if (fmt == 17) {
+        // NEG.D - double precision (64-bit)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        u64 bits = cpu.cp1().get_fpr_64(fs);
+        bits = bits ^ 0x8000000000000000ULL;  // Flip sign bit
+        cpu.cp1().set_fpr_64(fd, bits);
+    }
     return 1;
 }
 
 // FPU Round/Truncate/Ceil/Floor to Long
+// Round to 64-bit integer (Long)
 u32 ROUND_L_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s64 range), inexact
+    std::fesetround(FE_TONEAREST);
+    if (fmt == 16) {
+        // ROUND.L.S - round single to 64-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s64 result = static_cast<s64>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // ROUND.L.D - round double to 64-bit integer
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s64 result = static_cast<s64>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 TRUNC_L_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s64 range), inexact
+    if (fmt == 16) {
+        // TRUNC.L.S - truncate single to 64-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s64 result = static_cast<s64>(std::trunc(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // TRUNC.L.D - truncate double to 64-bit integer
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s64 result = static_cast<s64>(std::trunc(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 CEIL_L_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s64 range), inexact
+    if (fmt == 16) {
+        // CEIL.L.S - ceiling of single to 64-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s64 result = static_cast<s64>(std::ceil(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // CEIL.L.D - ceiling of double to 64-bit integer
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s64 result = static_cast<s64>(std::ceil(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 FLOOR_L_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s64 range), inexact
+    if (fmt == 16) {
+        // FLOOR.L.S - floor of single to 64-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s64 result = static_cast<s64>(std::floor(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // FLOOR.L.D - floor of double to 64-bit integer
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s64 result = static_cast<s64>(std::floor(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    }
     return 1;
 }
 
 // FPU Round/Truncate/Ceil/Floor to Word
 u32 ROUND_W_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s32 range), inexact
+    std::fesetround(FE_TONEAREST);
+    if (fmt == 16) {
+        // ROUND.W.S - round single to 32-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s32 result = static_cast<s32>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // ROUND.W.D - round double to 32-bit integer
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s32 result = static_cast<s32>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 TRUNC_W_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s32 range), inexact
+    std::fesetround(FE_TONEAREST);
+    if (fmt == 16) {
+        // TRUNC.W.S - truncate single to 32-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s32 result = static_cast<s32>(std::trunc(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // TRUNC.W.D - truncate double to 32-bit integer
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s32 result = static_cast<s32>(std::trunc(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 CEIL_W_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s32 range), inexact
+    std::fesetround(FE_TONEAREST);
+    if (fmt == 16) {
+        // CEIL.W.S - ceiling of single to 32-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s32 result = static_cast<s32>(std::ceil(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // CEIL.W.D - ceiling of double to 32-bit integer
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s32 result = static_cast<s32>(std::ceil(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 FLOOR_W_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - check for overflow (value out of s32 range), inexact
+    std::fesetround(FE_TONEAREST);
+    if (fmt == 16) {
+        // FLOOR.W.S - floor of single to 32-bit integer
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s32 result = static_cast<s32>(std::floor(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // FLOOR.W.D - floor of double to 32-bit integer
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s32 result = static_cast<s32>(std::floor(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    }
     return 1;
 }
 
 // FPU Convert
 u32 CVT_S_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - overflow (D->S), inexact (large integers lose precision)
+    if (fmt == 17) {
+        // CVT.S.D - convert double to single
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        cpu.cp1().set_fpr_single(fd, static_cast<f32>(f1));
+        return 2;
+    } else if (fmt == 20) {
+        // CVT.S.W - convert word to single
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        s32 f1 = static_cast<s32>(cpu.cp1().get_fpr_32(fs));
+        cpu.cp1().set_fpr_single(fd, static_cast<f32>(f1));
+        return 5;
+    } else if (fmt == 21) {
+        // CVT.S.L - convert long to single
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        s64 f1 = static_cast<s64>(cpu.cp1().get_fpr_64(fs));
+        cpu.cp1().set_fpr_single(fd, static_cast<f32>(f1));
+        return 5;
+    }
     return 1;
 }
 
 u32 CVT_D_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - inexact (large L integers lose precision)
+    if (fmt == 16) {
+        // CVT.D.S - convert single to double
+        if (!cpu.cp0().get_fr_bit() && (fd & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        cpu.cp1().set_fpr_double(fd, static_cast<f64>(f1));
+        return 1;
+    } else if (fmt == 20) {
+        // CVT.D.W - convert word to double
+        if (!cpu.cp0().get_fr_bit() && (fd & 1)) {
+            return 1;
+        }
+        s32 f1 = static_cast<s32>(cpu.cp1().get_fpr_32(fs));
+        cpu.cp1().set_fpr_double(fd, static_cast<f64>(f1));
+        return 5;
+    } else if (fmt == 21) {
+        // CVT.D.L - convert long to double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        s64 f1 = static_cast<s64>(cpu.cp1().get_fpr_64(fs));
+        cpu.cp1().set_fpr_double(fd, static_cast<f64>(f1));
+        return 5;
+    }
     return 1;
 }
 
 u32 CVT_W_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - invalid (NaN), overflow (value out of s32 range), inexact
+    if (fmt == 16) {
+        // CVT.W.S - convert single to word
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s32 result = static_cast<s32>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // CVT.W.D - convert double to word
+        if (!cpu.cp0().get_fr_bit() && (fs & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s32 result = static_cast<s32>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_32(fd, static_cast<u32>(result));
+        return 5;
+    }
     return 1;
 }
 
 u32 CVT_L_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 fd = instr.cop1_type.fd;
+
+    // TODO: FPU exceptions - invalid (NaN), overflow (value out of s64 range), inexact
+    if (fmt == 16) {
+        // CVT.L.S - convert single to long
+        if (!cpu.cp0().get_fr_bit() && (fd & 1)) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        s64 result = static_cast<s64>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    } else if (fmt == 17) {
+        // CVT.L.D - convert double to long
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (fd & 1))) {
+            return 1;
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        s64 result = static_cast<s64>(std::nearbyint(f1));
+        cpu.cp1().set_fpr_64(fd, static_cast<u64>(result));
+        return 5;
+    }
     return 1;
 }
 
 // FPU Compare
 u32 C_F_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    cpu.cp1().set_condition_bit(false);
     return 1;
 }
 
 u32 C_UN_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.UN does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.UN.S - unordered single comparison
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.UN.D - unordered double comparison
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_EQ_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.EQ does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.EQ.S - equal single comparison
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = (f1 == f2);
+    } else if (fmt == 17) {
+        // C.EQ.D - equal double comparison
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = (f1 == f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_UEQ_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.UEQ does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.UEQ.S - unordered single comparison
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = (f1 == f2) || (std::isnan(f1) || std::isnan(f2));
+    } else if (fmt == 17) {
+        // C.UEQ.D - unordered double comparison
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = (f1 == f2) || (std::isnan(f1) || std::isnan(f2));
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_OLT_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.OLT does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.OLT.S - ordered less than single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = (f1 < f2);
+    } else if (fmt == 17) {
+        // C.OLT.D - ordered less than double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = (f1 < f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_ULT_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.ULT does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.ULT.S - unordered or less than single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = (f1 < f2) || std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.ULT.D - unordered or less than double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = (f1 < f2) || std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_OLE_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.OLE does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.OLE.S - ordered less or equal single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = (f1 <= f2);
+    } else if (fmt == 17) {
+        // C.OLE.D - ordered less or equal double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = (f1 <= f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_ULE_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.ULE does not signal for NaN (quiet compare)
+    if (fmt == 16) {
+        // C.ULE.S - unordered or less or equal single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        condition = (f1 <= f2) || std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.ULE.D - unordered or less or equal double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        condition = (f1 <= f2) || std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_SF_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+
+    // C.SF signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.SF.S - signaling false single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+    } else if (fmt == 17) {
+        // C.SF.D - signaling false double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+    }
+    cpu.cp1().set_condition_bit(false);
     return 1;
 }
 
 u32 C_NGLE_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.NGLE signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.NGLE.S - not greater/less/equal single (signaling unordered)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.NGLE.D - not greater/less/equal double (signaling unordered)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_SEQ_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.SEQ signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.SEQ.S - signaling equal single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 == f2);
+    } else if (fmt == 17) {
+        // C.SEQ.D - signaling equal double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 == f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_NGL_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.NGL signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.NGL.S - not greater or less single (signaling equal or unordered)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 == f2) || std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.NGL.D - not greater or less double (signaling equal or unordered)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 == f2) || std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_LT_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.LT signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.LT.S - signaling less than single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 < f2);
+    } else if (fmt == 17) {
+        // C.LT.D - signaling less than double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 < f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_NGE_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.NGE signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.NGE.S - not greater or equal single (signaling less than or unordered)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 < f2) || std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.NGE.D - not greater or equal double (signaling less than or unordered)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 < f2) || std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_LE_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.LE signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.LE.S - signaling less or equal single
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 <= f2);
+    } else if (fmt == 17) {
+        // C.LE.D - signaling less or equal double
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 <= f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 
 u32 C_NGT_FMT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u8 fmt = instr.cop1_type.fmt;
+    u8 fs = instr.cop1_type.fs;
+    u8 ft = instr.cop1_type.ft;
+    bool condition = false;
+
+    // C.NGT signals Invalid exception for NaN
+    if (fmt == 16) {
+        // C.NGT.S - not greater than single (signaling less or equal or unordered)
+        f32 f1 = cpu.cp1().get_fpr_single(fs);
+        f32 f2 = cpu.cp1().get_fpr_single(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 <= f2) || std::isnan(f1) || std::isnan(f2);
+    } else if (fmt == 17) {
+        // C.NGT.D - not greater than double (signaling less or equal or unordered)
+        if (!cpu.cp0().get_fr_bit() && ((fs & 1) || (ft & 1))) {
+            // TODO: Reserved instruction exception for FR=0 with odd registers
+        }
+        f64 f1 = cpu.cp1().get_fpr_double(fs);
+        f64 f2 = cpu.cp1().get_fpr_double(ft);
+        if (std::isnan(f1) || std::isnan(f2)) {
+            // TODO: Invalid operation exception
+        }
+        condition = (f1 <= f2) || std::isnan(f1) || std::isnan(f2);
+    }
+    cpu.cp1().set_condition_bit(condition);
     return 1;
 }
 

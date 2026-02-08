@@ -98,12 +98,11 @@ void VIRenderer::render_frame() {
             }
             // TODO: Verify pixel format type 1 behavior (reserved? blank?)
 
-            // TODO: Verify correct pixel format conversion for SDL3 (check endianness)
-            // Pack as RGBA8888 (SDL expects ABGR in memory due to endianness)
-            pixel_buffer_[y * 640 + x] = (static_cast<u32>(alpha) << 24) |
-                                          (static_cast<u32>(blue) << 16) |
-                                          (static_cast<u32>(green) << 8) |
-                                          static_cast<u32>(red);
+            // Pack as RGBA8888 for SDL
+            pixel_buffer_[y * 640 + x] = (static_cast<u32>(red) << 24) |
+                                          (static_cast<u32>(green) << 16) |
+                                          (static_cast<u32>(blue) << 8) |
+                                          static_cast<u32>(alpha);
         }
     }
 

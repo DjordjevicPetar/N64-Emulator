@@ -55,11 +55,20 @@ u32 N64System::boot()
 
 void N64System::run()
 {
-    while (vi_.handle_events()) {
+    u64 event_check_counter = 0;
+    constexpr u64 EVENT_CHECK_INTERVAL = 10000;
+
+    while (true) {
         u32 cycles = cpu_.execute_next_instruction();
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
         pi_.process_passed_cycles(cycles);
+
+        event_check_counter += cycles;
+        if (event_check_counter >= EVENT_CHECK_INTERVAL) {
+            event_check_counter = 0;
+            if (!vi_.handle_events()) break;
+        }
     }
 }
 

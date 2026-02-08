@@ -81,6 +81,14 @@ public:
     [[nodiscard]] u32 get_fcr(u8 index) const;
     void set_fcr(u8 index, u32 value);
 
+    [[nodiscard]] f32 get_fpr_single(u8 index) const;
+    [[nodiscard]] f64 get_fpr_double(u8 index) const;
+    void set_fpr_single(u8 index, f32 value);
+    void set_fpr_double(u8 index, f64 value);
+
+    void set_condition_bit(bool value);
+    [[nodiscard]] bool get_condition_bit() const;
+
 private:
     // 32 64-bit registers (can be accessed as 32 singles or 16 doubles depending on FR bit)
     std::array<u64, 32> fpr_{};

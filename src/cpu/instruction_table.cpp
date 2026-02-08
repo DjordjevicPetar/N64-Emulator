@@ -200,10 +200,10 @@ InstructionTable::InstructionTable()
     cop1_cofun_table_[0x0D] = {"TRUNC_W_FMT", InstructionType::REGISTER_TYPE, TRUNC_W_FMT};
     cop1_cofun_table_[0x0E] = {"CEIL_W_FMT", InstructionType::REGISTER_TYPE, CEIL_W_FMT};
     cop1_cofun_table_[0x0F] = {"FLOOR_W_FMT", InstructionType::REGISTER_TYPE, FLOOR_W_FMT};
-    cop1_cofun_table_[0x11] = {"CVT_D_FMT", InstructionType::REGISTER_TYPE, CVT_D_FMT};
-    cop1_cofun_table_[0x15] = {"CVT_L_FMT", InstructionType::REGISTER_TYPE, CVT_L_FMT};
     cop1_cofun_table_[0x20] = {"CVT_S_FMT", InstructionType::REGISTER_TYPE, CVT_S_FMT};
+    cop1_cofun_table_[0x21] = {"CVT_D_FMT", InstructionType::REGISTER_TYPE, CVT_D_FMT};
     cop1_cofun_table_[0x24] = {"CVT_W_FMT", InstructionType::REGISTER_TYPE, CVT_W_FMT};
+    cop1_cofun_table_[0x25] = {"CVT_L_FMT", InstructionType::REGISTER_TYPE, CVT_L_FMT};
     cop1_cofun_table_[0x30] = {"C_F_FMT", InstructionType::REGISTER_TYPE, C_F_FMT};
     cop1_cofun_table_[0x31] = {"C_UN_FMT", InstructionType::REGISTER_TYPE, C_UN_FMT};
     cop1_cofun_table_[0x32] = {"C_EQ_FMT", InstructionType::REGISTER_TYPE, C_EQ_FMT};
