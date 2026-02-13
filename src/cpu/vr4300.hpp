@@ -35,6 +35,11 @@ public:
     [[nodiscard]] bool get_LLbit() const { return ll_bit_; }
     void set_LLbit(bool value) { ll_bit_ = value; }
 
+    [[nodiscard]] bool in_delay_slot() const { return branch_pending_ || should_branch;}
+    void reset_delay_slot() { should_branch = false; branch_pending_ = false; }
+
+    bool check_address_exception(u64 address, u8 word_size, bool is_load);
+
     // CP0 access
     [[nodiscard]] CP0& cp0() { return cp0_; }
     [[nodiscard]] const CP0& cp0() const { return cp0_; }
@@ -61,12 +66,13 @@ private:
     memory::MemoryMap& memory_;
     InstructionTable instruction_table_;
     Instruction current_instruction_{0};
-    CP0 cp0_;
+    CP0 cp0_{*this};
     CP1 cp1_;
 
     // Branch delay slot
     bool branch_pending_ = false;
     u64 branch_target_ = 0;
+    bool should_branch = false;
 
     void read_next_instruction();
 };

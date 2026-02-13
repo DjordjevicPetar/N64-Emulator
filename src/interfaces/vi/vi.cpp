@@ -1,6 +1,7 @@
 #include "vi.hpp"
 #include <stdexcept>
 #include <string>
+#include <iostream>
 
 namespace n64::interfaces {
 
@@ -136,14 +137,12 @@ void VI::write_register(u32 address, u32 value) {
 }
 
 void VI::process_passed_cycles(u32 cycles) {
-    // TODO: Handle uninitialized VI state more gracefully (log warning or use defaults)
     // Don't process if VI isn't configured yet
     if (h_total_.h_total == 0 || v_total_.v_total == 0) {
         return;
     }
     
     cycles_counter_ += cycles;
-    // TODO: Verify cycle-to-half-line conversion matches N64 VI timing (account for VI clock domain)
     // h_total is in 1/4 pixel units, dividing by 4 gives pixels per line
     u64 cycles_to_render_half_line = (h_total_.h_total + 1) / 4;
     
@@ -152,12 +151,9 @@ void VI::process_passed_cycles(u32 cycles) {
         cycles_to_render_half_line = 1;
     }
 
-    // TODO: Detect PAL vs NTSC from v_total/h_total and handle PAL timing differences
-    // For progressive mode, V_CURRENT counts to half the lines
-    // Use a separate counter for accurate frame timing
-    u32 lines_per_frame = v_total_.v_total + 1;  // 525 for NTSC, 625 for PAL
-    // TODO: Fix v_current_max calculation for interlaced (serrate=1) vs progressive modes
-    u32 v_current_max = lines_per_frame / 2;     // ~262 for progressive NTSC
+    // v_total is already in half-lines (525 for NTSC, 625 for PAL)
+    // v_current counts half-lines from 0 to v_total
+    u32 v_current_max = v_total_.v_total;
     
     while (cycles_counter_ >= cycles_to_render_half_line) {
         cycles_counter_ -= cycles_to_render_half_line;
@@ -165,21 +161,19 @@ void VI::process_passed_cycles(u32 cycles) {
         u32 old_v_current = v_current_.v_current;
         v_current_.v_current = (v_current_.v_current + 1) % (v_current_max + 1);
         
-        // TODO: Handle frame boundary detection more accurately for interlaced mode field transitions
         // Detect frame boundary (wrap around)
         if (v_current_.v_current < old_v_current) {
             if (ctrl_.serrate) {
-                v_current_.field = !v_current_.field;
+                v_current_.v_current ^= 1;  // Toggle field bit (bit 0)
             }
             renderer_.render_frame();
         }
         
-        // TODO: Verify VI interrupt timing — should it fire at start or end of half-line?
+        // VI interrupt fires when v_current matches v_intr
         if (v_current_.v_current == v_intr_.v_intr) {
             mi_.set_interrupt(MI_INTERRUPT_VI);
         }
     }
-    // TODO: Implement Leap pattern handling for PAL (h_total_leap register usage)
 }
 
 template u8 VI::read<u8>(u32) const;

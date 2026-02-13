@@ -196,6 +196,7 @@ u32 LUI(VR4300& cpu, const Instruction& instr) {
 u32 LB(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
     u64 value = cpu.read_memory<u8>(address);
+    if (cpu.check_address_exception(address, 1, true)) return 1;
     cpu.set_gpr(instr.i_type.rt, sign_extend8(value));
     return 1;
 }
@@ -203,12 +204,14 @@ u32 LB(VR4300& cpu, const Instruction& instr) {
 u32 LBU(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
     u64 value = cpu.read_memory<u8>(address);
+    if (cpu.check_address_exception(address, 1, true)) return 1;
     cpu.set_gpr(instr.i_type.rt, extend8(value));
     return 1;
 }
 
 u32 LH(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 2, true)) return 1;
     u64 value = cpu.read_memory<u16>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend16(value));
     return 1;
@@ -216,6 +219,7 @@ u32 LH(VR4300& cpu, const Instruction& instr) {
 
 u32 LHU(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 2, true)) return 1;
     u64 value = cpu.read_memory<u16>(address);
     cpu.set_gpr(instr.i_type.rt, extend16(value));
     return 1;
@@ -223,6 +227,7 @@ u32 LHU(VR4300& cpu, const Instruction& instr) {
 
 u32 LW(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 4, true)) return 1;
     u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend32(value));
     return 1;
@@ -230,6 +235,7 @@ u32 LW(VR4300& cpu, const Instruction& instr) {
 
 u32 LWU(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 4, true)) return 1;
     u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, extend32(value));
     return 1;
@@ -279,6 +285,7 @@ u32 LWR(VR4300& cpu, const Instruction& instr) {
 
 u32 LD(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 8, true)) return 1;
     u64 value = cpu.read_memory<u64>(address);
     cpu.set_gpr(instr.i_type.rt, value);
     return 1;
@@ -336,6 +343,7 @@ u32 LDR(VR4300& cpu, const Instruction& instr) {
 
 u32 LL(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 4, true)) return 1;
     u64 value = cpu.read_memory<u32>(address);
     cpu.set_gpr(instr.i_type.rt, sign_extend32(value));
     cpu.set_LLbit(true);
@@ -347,6 +355,7 @@ u32 LL(VR4300& cpu, const Instruction& instr) {
 
 u32 LLD(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 8, true)) return 1;
     u64 value = cpu.read_memory<u64>(address);
     cpu.set_gpr(instr.i_type.rt, value);
     cpu.set_LLbit(true);
@@ -359,18 +368,21 @@ u32 LLD(VR4300& cpu, const Instruction& instr) {
 // Store instructions
 u32 SB(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 1, false)) return 1;
     cpu.write_memory<u8>(address, static_cast<u8>(cpu.gpr(instr.i_type.rt)));
     return 1;
 }
 
 u32 SH(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 2, false)) return 1;
     cpu.write_memory<u16>(address, static_cast<u16>(cpu.gpr(instr.i_type.rt)));
     return 1;
 }
 
 u32 SW(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 4, false)) return 1;
     cpu.write_memory<u32>(address, static_cast<u32>(cpu.gpr(instr.i_type.rt)));
     return 1;
 }
@@ -419,6 +431,7 @@ u32 SWR(VR4300& cpu, const Instruction& instr) {
 
 u32 SD(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+    if (cpu.check_address_exception(address, 8, false)) return 1;
     cpu.write_memory<u64>(address, cpu.gpr(instr.i_type.rt));
     return 1;
 }
@@ -475,7 +488,7 @@ u32 SDR(VR4300& cpu, const Instruction& instr) {
 
 u32 SC(VR4300& cpu, const Instruction& instr) {
     u64 vaddr = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    
+    if (cpu.check_address_exception(vaddr, 4, false)) return 1;
     // On N64 (single-processor), SC only checks LLbit, not address
     // Address comparison is handled by cache coherency on multi-processor systems
     bool success = cpu.get_LLbit();
@@ -489,7 +502,7 @@ u32 SC(VR4300& cpu, const Instruction& instr) {
 
 u32 SCD(VR4300& cpu, const Instruction& instr) {
     u64 vaddr = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    
+    if (cpu.check_address_exception(vaddr, 8, false)) return 1;
     // On N64 (single-processor), SCD only checks LLbit, not address
     bool success = cpu.get_LLbit();
     if (success) {
@@ -503,10 +516,7 @@ u32 SCD(VR4300& cpu, const Instruction& instr) {
 // FPU Load/Store
 u32 LWC1(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    if ((address & 0x3) != 0) {
-        // TODO: Address error exception
-        return 1;
-    }
+    if (cpu.check_address_exception(address, 4, true)) return 1;
     u32 value = cpu.read_memory<u32>(address);
     u8 ft = instr.i_type.rt;
     
@@ -523,10 +533,7 @@ u32 LWC1(VR4300& cpu, const Instruction& instr) {
 
 u32 LDC1(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    if ((address & 0x7) != 0) {
-        // TODO: Address error exception
-        return 1;
-    }
+    if (cpu.check_address_exception(address, 8, true)) return 1;
     u64 value = cpu.read_memory<u64>(address);
     u8 ft = instr.i_type.rt;
     cpu.cp1().set_fpr_64(ft, value);
@@ -535,10 +542,7 @@ u32 LDC1(VR4300& cpu, const Instruction& instr) {
 
 u32 SWC1(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    if ((address & 0x3) != 0) {
-        // TODO: Address error exception
-        return 1;
-    }
+    if (cpu.check_address_exception(address, 4, false)) return 1;
     u8 ft = instr.i_type.rt;
     
     if (cpu.cp0().get_fr_bit()) {
@@ -554,10 +558,7 @@ u32 SWC1(VR4300& cpu, const Instruction& instr) {
 
 u32 SDC1(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
-    if ((address & 0x7) != 0) {
-        // TODO: Address error exception
-        return 1;
-    }
+    if (cpu.check_address_exception(address, 8, false)) return 1;
     u8 ft = instr.i_type.rt;
     if (cpu.cp0().get_fr_bit()) {
         cpu.write_memory<u64>(address, cpu.cp1().get_fpr_64(ft));
@@ -686,12 +687,12 @@ u32 JALR(VR4300& cpu, const Instruction& instr) {
 
 // System
 u32 SYSCALL(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    cpu.cp0().raise_exception(ExceptionCode::SYS);
     return 1;
 }
 
 u32 BREAK(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    cpu.cp0().raise_exception(ExceptionCode::BP);
     return 1;
 }
 
@@ -917,32 +918,56 @@ u32 SLTU(VR4300& cpu, const Instruction& instr) {
 
 // Trap
 u32 TGE(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.r_type.rs));
+    s64 value_rt = static_cast<s64>(cpu.gpr(instr.r_type.rt));
+    if (value_rs >= value_rt) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TGEU(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 value_rs = cpu.gpr(instr.r_type.rs);
+    u64 value_rt = cpu.gpr(instr.r_type.rt);
+    if (value_rs >= value_rt) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TLT(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.r_type.rs));
+    s64 value_rt = static_cast<s64>(cpu.gpr(instr.r_type.rt));
+    if (value_rs < value_rt) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TLTU(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 value_rs = cpu.gpr(instr.r_type.rs);
+    u64 value_rt = cpu.gpr(instr.r_type.rt);
+    if (value_rs < value_rt) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TEQ(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.r_type.rs));
+    s64 value_rt = static_cast<s64>(cpu.gpr(instr.r_type.rt));
+    if (value_rs == value_rt) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TNE(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.r_type.rs));
+    s64 value_rt = static_cast<s64>(cpu.gpr(instr.r_type.rt));
+    if (value_rs != value_rt) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
@@ -1028,32 +1053,56 @@ u32 BGEZALL(VR4300& cpu, const Instruction& instr) {
 
 // Trap immediate
 u32 TGEI(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.i_type.rs));
+    s64 value_imm = sign_extend16(instr.i_type.immediate);
+    if (value_rs >= value_imm) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TGEIU(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 value_rs = cpu.gpr(instr.i_type.rs);
+    u64 value_imm = static_cast<u64>(sign_extend16(instr.i_type.immediate));
+    if (value_rs >= value_imm) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TLTI(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.i_type.rs));
+    s64 value_imm = sign_extend16(instr.i_type.immediate);
+    if (value_rs < value_imm) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TLTIU(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    u64 value_rs = cpu.gpr(instr.i_type.rs);
+    u64 value_imm = static_cast<u64>(sign_extend16(instr.i_type.immediate));
+    if (value_rs < value_imm) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TEQI(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.i_type.rs));
+    s64 value_imm = sign_extend16(instr.i_type.immediate);
+    if (value_rs == value_imm) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
 u32 TNEI(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    s64 value_rs = static_cast<s64>(cpu.gpr(instr.i_type.rs));
+    s64 value_imm = sign_extend16(instr.i_type.immediate);
+    if (value_rs != value_imm) {
+        cpu.cp0().raise_exception(ExceptionCode::TR);
+    }
     return 1;
 }
 
@@ -1063,7 +1112,8 @@ u32 TNEI(VR4300& cpu, const Instruction& instr) {
 
 // Move from/to CP0
 u32 MFC0(VR4300& cpu, const Instruction& instr) {
-    cpu.set_gpr(instr.r_type.rt, static_cast<u32>(cpu.cp0().get_reg(instr.r_type.rd)));
+    u32 value = static_cast<u32>(cpu.cp0().get_reg(instr.r_type.rd));
+    cpu.set_gpr(instr.r_type.rt, sign_extend32(value));  // Sign-extend to 64-bit
     return 1;
 }
 
@@ -1104,13 +1154,13 @@ u32 TLBP(VR4300& cpu, const Instruction& instr) {
 }
 
 u32 ERET(VR4300& cpu, const Instruction& instr) {
-    u64 status = cpu.cp0().get_reg(CP0Reg::STATUS);
-    if (status & 0x4) {
-        cpu.cp0().set_reg(CP0Reg::STATUS, status & ~0x4);
-        cpu.set_pc(cpu.cp0().get_reg(CP0Reg::ERROR_EPC));
+    CP0Status& status = cpu.cp0().status();
+    if (status.erl) {
+        status.erl = 0;
+        cpu.set_pc(cpu.cp0().error_epc());
     } else {
-        cpu.cp0().set_reg(CP0Reg::STATUS, status & ~0x2);
-        cpu.set_pc(cpu.cp0().get_reg(CP0Reg::EPC));
+        status.exl = 0;
+        cpu.set_pc(cpu.cp0().epc());
     }
     cpu.set_LLbit(false);
     return 1;

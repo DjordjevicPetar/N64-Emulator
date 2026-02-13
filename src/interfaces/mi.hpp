@@ -36,6 +36,8 @@ public:
     void set_interrupt(MI_INTERRUPT_BITS interrupt);
     void clear_interrupt(MI_INTERRUPT_BITS interrupt);
 
+    [[nodiscard]] bool check_interrupts() const;
+
 private:
     u32 mode_;
     u32 version_;

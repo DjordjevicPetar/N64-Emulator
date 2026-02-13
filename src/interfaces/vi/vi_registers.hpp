@@ -72,10 +72,10 @@ union VIVIntr {
 
 // VI_V_CURRENT (0x04400010)
 union VIVCurrent {
+    // TODO: Implement field bit (bit 0)
     u32 raw;
     struct {
-        u32 field : 1;      // 0: Field number (0 or 1 in interlaced modes)
-        u32 v_current : 9;  // 1-9: Current half-line
+        u32 v_current : 10; // 0-9: Current half-line (bit 0 = field in interlaced mode)
         u32 : 22;           // 10-31: unused
     };
 };

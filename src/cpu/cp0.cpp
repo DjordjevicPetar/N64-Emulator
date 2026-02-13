@@ -1,9 +1,10 @@
 #include "cp0.hpp"
+#include "vr4300.hpp"
 #include <stdexcept>
 
 namespace n64::cpu {
 
-CP0::CP0()
+CP0::CP0(VR4300& cpu)
     : index_{.raw = 0}
     , random_{.raw = 31}            // Starts at 31
     , entry_lo0_{.raw = 0}
@@ -29,6 +30,7 @@ CP0::CP0()
     , tag_lo_{.raw = 0}
     , tag_hi_(0)
     , error_epc_(0)
+    , cpu_(cpu)
 {
 }
 
@@ -41,6 +43,7 @@ void CP0::set_reg(u8 index, u64 value) {
         case 4:  context_.raw = value; break;
         case 5:  page_mask_.raw = static_cast<u32>(value) & 0x01FFE000; break;
         case 6:  
+            // TODO: Cold reset should reset wired to 0
             wired_.raw = static_cast<u32>(value) & 0x3F;
             random_.raw = 31;  // Reset random when wired is written
             break;
@@ -49,8 +52,7 @@ void CP0::set_reg(u8 index, u64 value) {
         case 10: entry_hi_.raw = value; break;
         case 11: 
             compare_ = static_cast<u32>(value);
-            // Writing COMPARE clears timer interrupt (IP7)
-            cause_.raw &= ~0x8000;
+            cause_.timer_int = 0;
             break;
         case 12: status_.raw = static_cast<u32>(value) & 0xFF57FFFF; break;
         case 13: 
@@ -59,7 +61,9 @@ void CP0::set_reg(u8 index, u64 value) {
             break;
         case 14: epc_ = value; break;
         case 15: /* PRID is read-only */ break;
-        case 16: config_.raw = static_cast<u32>(value) & 0x0F00800F; break;
+        case 16: 
+            // TODO: Cold reset should reset config to EP=0000 BE=1
+            config_.raw = static_cast<u32>(value) & 0x0F00800F; break;
         case 17: ll_addr_ = static_cast<u32>(value); break;
         case 18: watch_lo_.raw = static_cast<u32>(value); break;
         case 19: watch_hi_.raw = static_cast<u32>(value) & 0x0F; break;
@@ -110,8 +114,9 @@ u32 CP0::translate_address(u64 virtual_address) const {
     switch (segment) {
         case 0: case 1: case 2: case 3:
             // KUSEG - TLB mapped (user segment)
-            // TODO: Implement TLB lookup
-            throw std::runtime_error("KUSEG address space not supported (TLB required)");
+            // TODO: Implement proper TLB lookup
+            // For now, direct map like KSEG0 (works for most test ROMs)
+            return static_cast<u32>(virtual_address & 0x1FFFFFFF);
         case 4:
             // KSEG0 - Direct mapped, cached (0x80000000 - 0x9FFFFFFF)
             return static_cast<u32>(virtual_address & 0x1FFFFFFF);
@@ -127,6 +132,108 @@ u32 CP0::translate_address(u64 virtual_address) const {
         default:
             throw std::runtime_error("Invalid address segment");
     }
+}
+
+void CP0::handle_random_register() {
+    // TODO: Cold reset should reset random to 31
+    if ((random_.random & 0x1F) == (wired_.wired & 0x1F)) {
+        random_.random = 31;
+    } else {
+        random_.random--;
+    }
+}
+
+void CP0::handle_count_register(u32 cycles) {
+    u32 last_count = count_;
+    if (count_odd_) cycles++;
+
+    if (cycles & 1) {
+        count_odd_ = true;
+        count_ += (cycles - 1) >> 1;
+    } else {
+        count_odd_ = false;
+        count_ += cycles >> 1;
+    }
+
+    // TODO: Fix overflow issue
+    if (last_count < compare_ && count_ >= compare_) {
+        cause_.timer_int = 1;
+    }
+}
+
+void CP0::raise_exception(ExceptionCode code, u8 ce) {
+    // Set exception code in Cause register
+    cause_.exc_code = static_cast<u32>(code);
+
+    if (code == ExceptionCode::CPU) {
+        cause_.ce = ce;
+    }
+
+    if (!status_.exl) {
+        // EPC = address of the instruction that caused the exception
+        // PC is already incremented by 4 after fetch, so subtract 4
+        // If in delay slot, EPC = branch instruction (subtract 8) and set BD
+        if (cpu_.in_delay_slot()) {
+            cause_.bd = 1;
+            epc_ = cpu_.pc() - 8;  // PC of the branch instruction
+            cpu_.reset_delay_slot();
+        } else {
+            cause_.bd = 0;
+            epc_ = cpu_.pc() - 4;  // PC of the faulting instruction
+        }
+    }
+    // If EXL is already set (nested exception), don't overwrite EPC/BD
+
+    // Enter exception mode
+    status_.exl = 1;
+
+    // Jump to exception vector
+    cpu_.set_pc(get_exception_vector_address(code));
+}
+
+void CP0::raise_address_exception(ExceptionCode code, u64 address) {
+    bad_vaddr_ = address;
+    context_.bad_vpn2 = (address >> 13) & 0x7FFFF;
+    raise_exception(code);
+}
+
+
+void CP0::check_interrupts() {
+    // Interrupts are only taken when:
+    // IE=1 (interrupts enabled), EXL=0 (not in exception), ERL=0 (not in error)
+    if (!status_.ie || status_.exl || status_.erl) return;
+
+    // Check if any pending interrupt is enabled in the mask
+    // ip = bits 8-15 of Cause, im = bits 8-15 of Status
+    u8 pending = cause_.ip | (cause_.timer_int << 7);
+    if (pending & status_.im) {
+        raise_exception(ExceptionCode::INT);
+    }
+}
+
+u64 CP0::get_exception_vector_address(ExceptionCode code) const {
+    // Base address depends on BEV bit in Status register
+    // BEV=0: base = 0x80000000, BEV=1: base = 0xBFC00200
+    u64 base;
+    bool bev = (status_.ds >> 6) & 1;  // BEV is bit 22 of Status = bit 6 of ds field
+
+    if (bev) {
+        base = EXCEPTION_VECTOR_ADDRESS_32_BEV;  // 0xBFC00200
+    } else {
+        base = EXCEPTION_VECTOR_ADDRESS_32_NO_BEV;  // 0x80000000
+    }
+
+    // Offset depends on exception type
+    u32 offset;
+    if (code == ExceptionCode::TLBL || code == ExceptionCode::TLBS) {
+        // TLB Refill gets its own vector (only when EXL=0, handled above)
+        offset = 0x000;
+    } else {
+        // General exception vector
+        offset = 0x180;
+    }
+
+    return base + offset;
 }
 
 } // namespace n64::cpu

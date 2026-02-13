@@ -34,7 +34,7 @@ private:
     std::array<RSPInstructionEntry, 32> cop0_table_;
 
     std::array<RSPInstructionEntry, 32> cop2_move_table_;
-    std::array<RSPInstructionEntry, 32> cop2_compute_table_;
+    std::array<RSPInstructionEntry, 64> cop2_compute_table_;
     std::array<RSPInstructionEntry, 32> lwc2_table_;
     std::array<RSPInstructionEntry, 32> swc2_table_;
 

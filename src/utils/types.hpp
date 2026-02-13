@@ -151,4 +151,22 @@ template<typename T>
     }
 }
 
+inline void clear_set_resolver(u32& value, bool clear, bool set, u8 bit) {
+    if (clear && !set) {
+        value = static_cast<u32>(set_bit(value, bit, false));
+    }
+    if (set && !clear) {
+        value = static_cast<u32>(set_bit(value, bit, true));
+    }
+}
+
+inline void clear_set_resolver(u64& value, bool clear, bool set, u8 bit) {
+    if (clear && !set) {
+        value = set_bit(value, bit, false);
+    }
+    if (set && !clear) {
+        value = set_bit(value, bit, true);
+    }
+}
+
 } // namespace n64

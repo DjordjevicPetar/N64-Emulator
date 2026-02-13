@@ -142,31 +142,20 @@ void RSP::write_register(u32 address, u32 value) {
             return;
         case RSP_REGISTERS_ADDRESS::RSP_STATUS: {
             // clr/set pairs - if both set, no change
-            if (get_bit(value, 0) && !get_bit(value, 1)) status_.halt = 0;
-            if (get_bit(value, 1) && !get_bit(value, 0)) status_.halt = 1;
-            if (get_bit(value, 2)) status_.broke = 0;
+            clear_set_resolver(status_.raw, get_bit(value, 0),  get_bit(value, 1),  0);  // halt
+            if (get_bit(value, 2)) status_.broke = 0;  // clear broke (no set pair)
             if (get_bit(value, 3) && !get_bit(value, 4)) mi_.clear_interrupt(interfaces::MI_INTERRUPT_SP);
             if (get_bit(value, 4) && !get_bit(value, 3)) mi_.set_interrupt(interfaces::MI_INTERRUPT_SP);
-            if (get_bit(value, 5) && !get_bit(value, 6)) status_.single_step = 0;
-            if (get_bit(value, 6) && !get_bit(value, 5)) status_.single_step = 1;
-            if (get_bit(value, 7) && !get_bit(value, 8)) status_.interrupt_on_break = 0;
-            if (get_bit(value, 8) && !get_bit(value, 7)) status_.interrupt_on_break = 1;
-            if (get_bit(value, 9) && !get_bit(value, 10)) status_.signal0 = 0;
-            if (get_bit(value, 10) && !get_bit(value, 9)) status_.signal0 = 1;
-            if (get_bit(value, 11) && !get_bit(value, 12)) status_.signal1 = 0;
-            if (get_bit(value, 12) && !get_bit(value, 11)) status_.signal1 = 1;
-            if (get_bit(value, 13) && !get_bit(value, 14)) status_.signal2 = 0;
-            if (get_bit(value, 14) && !get_bit(value, 13)) status_.signal2 = 1;
-            if (get_bit(value, 15) && !get_bit(value, 16)) status_.signal3 = 0;
-            if (get_bit(value, 16) && !get_bit(value, 15)) status_.signal3 = 1;
-            if (get_bit(value, 17) && !get_bit(value, 18)) status_.signal4 = 0;
-            if (get_bit(value, 18) && !get_bit(value, 17)) status_.signal4 = 1;
-            if (get_bit(value, 19) && !get_bit(value, 20)) status_.signal5 = 0;
-            if (get_bit(value, 20) && !get_bit(value, 19)) status_.signal5 = 1;
-            if (get_bit(value, 21) && !get_bit(value, 22)) status_.signal6 = 0;
-            if (get_bit(value, 22) && !get_bit(value, 21)) status_.signal6 = 1;
-            if (get_bit(value, 23) && !get_bit(value, 24)) status_.signal7 = 0;
-            if (get_bit(value, 24) && !get_bit(value, 23)) status_.signal7 = 1;
+            clear_set_resolver(status_.raw, get_bit(value, 5),  get_bit(value, 6),  5);  // single_step
+            clear_set_resolver(status_.raw, get_bit(value, 7),  get_bit(value, 8),  6);  // interrupt_on_break
+            clear_set_resolver(status_.raw, get_bit(value, 9),  get_bit(value, 10), 7);  // signal0
+            clear_set_resolver(status_.raw, get_bit(value, 11), get_bit(value, 12), 8);  // signal1
+            clear_set_resolver(status_.raw, get_bit(value, 13), get_bit(value, 14), 9);  // signal2
+            clear_set_resolver(status_.raw, get_bit(value, 15), get_bit(value, 16), 10); // signal3
+            clear_set_resolver(status_.raw, get_bit(value, 17), get_bit(value, 18), 11); // signal4
+            clear_set_resolver(status_.raw, get_bit(value, 19), get_bit(value, 20), 12); // signal5
+            clear_set_resolver(status_.raw, get_bit(value, 21), get_bit(value, 22), 13); // signal6
+            clear_set_resolver(status_.raw, get_bit(value, 23), get_bit(value, 24), 14); // signal7
             return;
         }
         case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:

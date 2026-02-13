@@ -76,47 +76,13 @@ void RDP::write_register(u32 address, u32 value) {
             // TODO: Parse commands from start_ to end_ and execute them
             break;
         case RDP_REGISTERS_ADDRESS::DPC_STATUS: {
-            bool clr_clock = get_bit(value, 9);
-            bool clr_buffer_busy = get_bit(value, 8);
-            bool clr_pipe_busy = get_bit(value, 7);
-            bool clr_tmem_busy = get_bit(value, 6);
-            bool set_flush = get_bit(value, 5);
-            bool clr_flush = get_bit(value, 4);
-            bool set_freeze = get_bit(value, 3);
-            bool clr_freeze = get_bit(value, 2);
-            bool set_xbus = get_bit(value, 1);
-            bool clr_xbus = get_bit(value, 0);
-
-            if (clr_clock) {
-                clock_ = 0;
-            }
-            if (clr_buffer_busy) {
-                buf_busy_ = 0;
-            }
-            if (clr_pipe_busy) {
-                pipe_busy_ = 0;
-            }
-            if (clr_tmem_busy) {
-                tmem_busy_ = 0;
-            }
-            if (set_flush & !clr_flush) {
-                status_ = set_bit(status_, 2, true);
-            }
-            if (clr_flush & !set_flush) {
-                status_ = set_bit(status_, 2, false);
-            }
-            if (set_freeze & !clr_freeze) {
-                status_ = set_bit(status_, 1, true);
-            }
-            if (clr_freeze & !set_freeze) {
-                status_ = set_bit(status_, 1, false);
-            }
-            if (set_xbus & !clr_xbus) {
-                status_ = set_bit(status_, 0, true);
-            }
-            if (clr_xbus & !set_xbus) {
-                status_ = set_bit(status_, 0, false);
-            }
+            if (get_bit(value, 9)) clock_ = 0;
+            if (get_bit(value, 8)) buf_busy_ = 0;
+            if (get_bit(value, 7)) pipe_busy_ = 0;
+            if (get_bit(value, 6)) tmem_busy_ = 0;
+            clear_set_resolver(status_, get_bit(value, 0), get_bit(value, 1), 0);  // xbus
+            clear_set_resolver(status_, get_bit(value, 2), get_bit(value, 3), 1);  // freeze
+            clear_set_resolver(status_, get_bit(value, 4), get_bit(value, 5), 2);  // flush
             break;
         }
         default:

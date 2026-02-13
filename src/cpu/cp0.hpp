@@ -5,6 +5,17 @@
 
 namespace n64::cpu {
 
+class VR4300;  // Forward declaration
+
+// Exception vector addresses for cold reset, soft reset and NMI
+constexpr u64 EXCEPTION_VECTOR_ADDRESS_64_RESET = 0xFFFF'FFFF'BFC0'0000;
+constexpr u32 EXCEPTION_VECTOR_ADDRESS_32_RESET = 0xBFC0'0000;
+
+constexpr u64 EXCEPTION_VECTOR_ADDRESS_64_BEV = 0xFFFF'FFFF'BFC0'0200;
+constexpr u64 EXCEPTION_VECTOR_ADDRESS_64_NO_BEV = 0xFFFF'FFFF'8000'0000;
+constexpr u32 EXCEPTION_VECTOR_ADDRESS_32_BEV = 0xBFC0'0200;
+constexpr u32 EXCEPTION_VECTOR_ADDRESS_32_NO_BEV = 0x8000'0000;
+
 // =============================================================================
 // CP0 Register Unions
 // =============================================================================
@@ -48,8 +59,7 @@ union CP0Context {
     struct {
         u64 : 4;            // Bits 0-3: Zero
         u64 bad_vpn2 : 19;  // Bits 4-22: Virtual Page Number / 2
-        u64 pte_base : 9;   // Bits 23-31: Page Table Entry base
-        u64 : 32;           // Bits 32-63: Unused in 32-bit mode
+        u64 pte_base : 41;   // Bits 23-64: Page Table Entry base
     };
 };
 
@@ -124,7 +134,8 @@ union CP0Cause {
         u32 : 2;            // Bits 0-1: Unused
         u32 exc_code : 5;   // Bits 2-6: Exception code
         u32 : 1;            // Bit 7: Unused
-        u32 ip : 8;         // Bits 8-15: Interrupt Pending (IP0-IP7)
+        u32 ip : 7;         // Bits 8-14: Interrupt Pending (IP0-IP6)
+        u32 timer_int : 1;  // Bit 15: Timer interrupt (IP7)
         u32 : 12;           // Bits 16-27: Unused
         u32 ce : 2;         // Bits 28-29: Coprocessor error number
         u32 : 1;            // Bit 30: Unused
@@ -284,7 +295,7 @@ enum class ExceptionCode : u8 {
 
 class CP0 {
 public:
-    CP0();
+    CP0(VR4300& cpu);
     ~CP0() = default;
 
     // Generic register access (for MTC0/MFC0)
@@ -303,6 +314,15 @@ public:
     [[nodiscard]] const CP0Cause& cause() const { return cause_; }
 
     [[nodiscard]] bool get_fr_bit() const { return status_.fr; }
+    [[nodiscard]] u64 epc() const { return epc_; }
+    [[nodiscard]] u64 error_epc() const { return error_epc_; }    
+
+    void handle_random_register();
+    void handle_count_register(u32 cycles);
+    void check_interrupts();
+    void raise_exception(ExceptionCode code, u8 ce = 0);
+    void raise_address_exception(ExceptionCode code, u64 address);
+    void set_mi_interrupt(bool active) { cause_.ip = set_bit(cause_.ip, 2, active); }  // IP2 = MI interrupt
 
 private:
     // TLB registers
@@ -337,6 +357,13 @@ private:
     CP0TagLo tag_lo_;
     u32 tag_hi_;
     u64 error_epc_;
+
+    // Reference to parent CPU
+    VR4300& cpu_;
+
+    bool count_odd_ = false;
+
+    [[nodiscard]] u64 get_exception_vector_address(ExceptionCode code) const;
 };
 
 } // namespace n64::cpu

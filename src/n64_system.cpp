@@ -24,6 +24,16 @@ N64System::N64System(const std::string& rom_path)
     // Boot the system
     u32 pc_address = boot();
     cpu_.set_pc(pc_address);
+
+    // Simulate what PIF boot code sets up after IPL3 runs:
+    // CP0 registers as they appear after PIF boot completes
+    cpu_.cp0().set_reg(4,  0x007FFFF0);             // Context
+    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF);     // BadVAddr = 0xFFFFFFFF
+    cpu_.cp0().set_reg(12, 0x241000E0);             // Status: CU1=1, FR=1, SR=1, KX=1, SX=1, UX=1
+    cpu_.cp0().set_reg(13, 0x00000000);             // Cause = 0
+    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF);     // EPC = 0xFFFFFFFF
+    cpu_.cp0().set_reg(16, 0x0006E463);             // Config
+    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF);     // ErrorEPC = 0xFFFFFFFF
 }
 
 u32 N64System::boot()
@@ -63,6 +73,7 @@ void N64System::run()
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
         pi_.process_passed_cycles(cycles);
+        cpu_.cp0().set_mi_interrupt(mi_.check_interrupts());
 
         event_check_counter += cycles;
         if (event_check_counter >= EVENT_CHECK_INTERVAL) {
