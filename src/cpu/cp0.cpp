@@ -114,8 +114,8 @@ u32 CP0::translate_address(u64 virtual_address) const {
     switch (segment) {
         case 0: case 1: case 2: case 3:
             // KUSEG - TLB mapped (user segment)
-            // TODO: Implement proper TLB lookup
-            // For now, direct map like KSEG0 (works for most test ROMs)
+            // TODO: Implement TLB lookup - required for games that use virtual memory
+            // Currently direct-mapped as workaround (works for test ROMs only)
             return static_cast<u32>(virtual_address & 0x1FFFFFFF);
         case 4:
             // KSEG0 - Direct mapped, cached (0x80000000 - 0x9FFFFFFF)
@@ -155,7 +155,7 @@ void CP0::handle_count_register(u32 cycles) {
         count_ += cycles >> 1;
     }
 
-    // TODO: Fix overflow issue
+    // TODO: Handle COUNT overflow (wrap past 0xFFFFFFFF) when checking COMPARE match
     if (last_count < compare_ && count_ >= compare_) {
         cause_.timer_int = 1;
     }

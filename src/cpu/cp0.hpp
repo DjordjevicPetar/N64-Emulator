@@ -325,6 +325,9 @@ public:
     void set_mi_interrupt(bool active) { cause_.ip = set_bit(cause_.ip, 2, active); }  // IP2 = MI interrupt
 
 private:
+    // TODO: Add TLB array (32 entries) with EntryHi/EntryLo0/EntryLo1/PageMask per entry
+    // TODO: Implement TLB lookup for KUSEG/KSSEG/KSEG3 address translation
+    
     // TLB registers
     CP0Index index_;
     CP0Random random_;

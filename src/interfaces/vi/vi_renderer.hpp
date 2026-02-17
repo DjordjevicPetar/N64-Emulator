@@ -27,6 +27,8 @@ private:
     SDL_Renderer* renderer_;
     SDL_Texture* texture_;
     std::vector<u32> pixel_buffer_;  // RGBA pixel buffer
+    u32 texture_width_;
+    u32 texture_height_;
 };
 
 } // namespace n64::interfaces

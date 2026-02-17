@@ -9,7 +9,7 @@ N64System::N64System(const std::string& rom_path)
     , pi_(mi_)
     , ri_()
     , rom_(pi_, rom_path)
-    , rdp_()
+    , rdp_(rdram_, mi_)
     , rsp_(mi_, rdp_, rdram_)
     , ai_(mi_)
     , vi_(mi_, rdram_)
@@ -25,6 +25,7 @@ N64System::N64System(const std::string& rom_path)
     u32 pc_address = boot();
     cpu_.set_pc(pc_address);
 
+    // TODO: Replace hardcoded boot stub with actual PIF ROM execution (IPL1/IPL2/IPL3)
     // Simulate what PIF boot code sets up after IPL3 runs:
     // CP0 registers as they appear after PIF boot completes
     cpu_.cp0().set_reg(4,  0x007FFFF0);             // Context
@@ -73,6 +74,7 @@ void N64System::run()
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
         pi_.process_passed_cycles(cycles);
+        // TODO: Process AI cycles for audio playback timing
         cpu_.cp0().set_mi_interrupt(mi_.check_interrupts());
 
         event_check_counter += cycles;

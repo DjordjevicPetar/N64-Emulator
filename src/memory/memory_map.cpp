@@ -89,6 +89,9 @@ T MemoryMap::read(u32 address)
         return pif_.read<T>(address);
     }
     
+    // TODO: Handle RDRAM register reads (0x03F00000-0x03FFFFFF) - currently falls into RDRAM range
+    // TODO: Handle RDP span registers (0x04200000-0x042FFFFF) separately from command registers
+    // TODO: Handle ISViewer debug output (0x13FF0000-0x13FF0020) for homebrew debug prints
     throw std::runtime_error("Unmapped memory read at address: " + std::to_string(address));
 }
 

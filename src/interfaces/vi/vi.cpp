@@ -41,7 +41,7 @@ void VI::write(u32 address, T value) {
 }
 
 u32 VI::read_register(u32 address) const {
-    // TODO: Verify if reading VI_V_CURRENT should latch/update the value
+    // NOTE: On real hardware, reading VI_V_CURRENT returns the current half-line being rendered
     switch (address) {
         case VI_CTRL:
             return ctrl_.raw;

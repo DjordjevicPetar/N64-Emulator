@@ -5,20 +5,16 @@
 #include <cmath>
 #include <cfenv>
 
-// TODO: CPU instruction implementation needs work:
-// 
 // MISSING INSTRUCTIONS:
-// TODO: Implement full FPU instruction set (~40 instructions) - LWC1, SWC1, FPU arithmetic
-// TODO: Implement trap instructions with exception generation (TGE, TLT, TEQ, etc.)
-// TODO: Implement TLB instructions (TLBR, TLBWI, TLBWR, TLBP)
-// TODO: Implement CACHE instruction with actual cache operations
+// TODO: Implement TLB instructions (TLBR, TLBWI, TLBWR, TLBP) - currently stubbed as NOPs
+// TODO: Implement CACHE instruction (currently NOP, needs TLB for virtual address translation)
 //
 // EXCEPTION HANDLING:
 // TODO: Implement overflow exception for ADDI, ADD, SUB, DADDI, DADD, DSUB
-// TODO: Implement address error exceptions for unaligned memory access
-// TODO: Implement TLB miss exceptions
-// TODO: Implement SYSCALL and BREAK exceptions properly
-// TODO: Implement exception framework (save EPC, set CAUSE, update STATUS)
+// TODO: Implement TLB miss/invalid exceptions (TLBL, TLBS)
+// TODO: Implement reserved instruction exception for FR=0 with odd FPU registers
+// TODO: Implement FPU exceptions (invalid operation, divide by zero, overflow, underflow, inexact)
+// TODO: Implement COP unusable exception when CU bit not set in Status register
 //
 // CYCLE ACCURACY:
 // TODO: Verify cycle counts for all instructions
@@ -572,7 +568,7 @@ u32 SDC1(VR4300& cpu, const Instruction& instr) {
 
 // Cache
 u32 CACHE(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement on TLB
+    // TODO: Implement cache operations (requires TLB for virtual-to-physical translation)
     return 1;
 }
 
@@ -1134,22 +1130,22 @@ u32 DMTC0(VR4300& cpu, const Instruction& instr) {
 
 // TLB instructions
 u32 TLBR(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // TODO: Read TLB entry at Index into EntryHi, EntryLo0, EntryLo1, PageMask
     return 1;
 }
 
 u32 TLBWI(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // TODO: Write EntryHi, EntryLo0, EntryLo1, PageMask into TLB entry at Index
     return 1;
 }
 
 u32 TLBWR(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // TODO: Write EntryHi, EntryLo0, EntryLo1, PageMask into TLB entry at Random
     return 1;
 }
 
 u32 TLBP(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement
+    // TODO: Search TLB for entry matching EntryHi, set Index register (or set P bit if not found)
     return 1;
 }
 
