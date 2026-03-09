@@ -30,6 +30,9 @@ void CP1::set_fcr(u8 index, u32 value) {
 }
 
 u32 CP1::get_fpr_32(u8 index) const {
+    if (fr_bit_) {
+        return static_cast<u32>(fpr_[index] & 0xFFFFFFFF);
+    }
     u8 reg_index = index & ~1;
     bool is_low = (index & 1) == 0;
 
@@ -45,6 +48,10 @@ u64 CP1::get_fpr_64(u8 index) const {
 }
 
 void CP1::set_fpr_32(u8 index, u32 value) {
+    if (fr_bit_) {
+        fpr_[index] = static_cast<u64>(value);
+        return;
+    }
     u8 reg_index = index & ~1;
     bool is_low = (index & 1) == 0;
     

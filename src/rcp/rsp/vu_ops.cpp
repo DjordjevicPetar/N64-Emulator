@@ -128,15 +128,13 @@ u8 VMUDL(RSP& rsp, const RSPInstruction& instr)
         u16 element_vs = rsp.vu().read_element(vs, i);
         u16 element_vt = rsp.vu().get_vt_element(vt, i, e);
         
-        u32 product = static_cast<u32>(element_vs) * static_cast<u32>(element_vt);
-        u16 sign_ext = (product & 0x80000000) ? 0xFFFF : 0x0000;
-        s16 upper = product >> 16;
+        u16 result = static_cast<u16>((static_cast<u32>(element_vs) * static_cast<u32>(element_vt)) >> 16);
 
         rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, sign_ext);
-        rsp.vu().set_accumulator_low(i, upper);
+        rsp.vu().set_accumulator_mid(i, 0);
+        rsp.vu().set_accumulator_low(i, result);
         
-        rsp.vu().write_element(vd, i, clamp_signed(upper));
+        rsp.vu().write_element(vd, i, result);
     }
     return 1;
 }
@@ -154,11 +152,11 @@ u8 VMUDM(RSP& rsp, const RSPInstruction& instr)
         
         s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
 
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, product >> 16);
+        rsp.vu().set_accumulator_high(i, (product >> 31) ? 0xFFFF : 0x0000);
+        rsp.vu().set_accumulator_mid(i, (product >> 16) & 0xFFFF);
         rsp.vu().set_accumulator_low(i, product & 0xFFFF);
         
-        rsp.vu().write_element(vd, i, clamp_signed(product >> 16));
+        rsp.vu().write_element(vd, i, (product >> 16) & 0xFFFF);
     }
     return 1;
 }
@@ -176,11 +174,11 @@ u8 VMUDN(RSP& rsp, const RSPInstruction& instr)
         
         s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
 
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, product >> 16);
+        rsp.vu().set_accumulator_high(i, (product >> 31) ? 0xFFFF : 0x0000);
+        rsp.vu().set_accumulator_mid(i, (product >> 16) & 0xFFFF);
         rsp.vu().set_accumulator_low(i, product & 0xFFFF);
         
-        rsp.vu().write_element(vd, i, clamp_signed(product & 0xFFFF));
+        rsp.vu().write_element(vd, i, product & 0xFFFF);
     }
     return 1;
 }
@@ -197,12 +195,22 @@ u8 VMUDH(RSP& rsp, const RSPInstruction& instr)
         s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, e));
         
         s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
+        u16 hi = (product >> 16) & 0xFFFF;
+        u16 md = product & 0xFFFF;
 
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, product >> 16);
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
         rsp.vu().set_accumulator_low(i, 0);
         
-        rsp.vu().write_element(vd, i, clamp_signed(product >> 16));
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = (hi != 0xFFFF || sm >= 0) ? 0x8000 : md;
+        } else {
+            vd_val = (hi != 0x0000 || sm < 0) ? 0x7FFF : md;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -218,14 +226,28 @@ u8 VMACF(RSP& rsp, const RSPInstruction& instr)
         s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
         s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, e));
         
-        s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
-        s32 acc_47_16 = (product << 1) + (rsp.vu().get_accumulator_high(i) << 16 | rsp.vu().get_accumulator_mid(i));
-
-        rsp.vu().set_accumulator_high(i, acc_47_16 >> 16);
-        rsp.vu().set_accumulator_mid(i, acc_47_16 & 0xFFFF);
-        rsp.vu().set_accumulator_low(i, 0);
+        s64 product = static_cast<s64>(element_vs) * static_cast<s64>(element_vt) * 2;
         
-        rsp.vu().write_element(vd, i, clamp_signed(acc_47_16 & 0xFFFF));
+        u64 acc_u = (static_cast<u64>(rsp.vu().get_accumulator_high(i) & 0xFFFF) << 32) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_mid(i) & 0xFFFF) << 16) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_low(i) & 0xFFFF));
+        s64 acc = (static_cast<s64>(acc_u << 16) >> 16) + product;
+        
+        u16 hi = (acc >> 32) & 0xFFFF;
+        u16 md = (acc >> 16) & 0xFFFF;
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
+        rsp.vu().set_accumulator_low(i, acc & 0xFFFF);
+        
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = (hi != 0xFFFF || sm >= 0) ? 0x8000 : md;
+        } else {
+            vd_val = (hi != 0x0000 || sm < 0) ? 0x7FFF : md;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -241,14 +263,30 @@ u8 VMACU(RSP& rsp, const RSPInstruction& instr)
         s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
         s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, e));
         
-        s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
-        s32 acc_47_16 = (product << 1) + (rsp.vu().get_accumulator_high(i) << 16 | rsp.vu().get_accumulator_mid(i));
-
-        rsp.vu().set_accumulator_high(i, acc_47_16 >> 16);
-        rsp.vu().set_accumulator_mid(i, acc_47_16 & 0xFFFF);
-        rsp.vu().set_accumulator_low(i, 0);
+        s64 product = static_cast<s64>(element_vs) * static_cast<s64>(element_vt) * 2;
         
-        rsp.vu().write_element(vd, i, clamp_unsigned(acc_47_16 >> 16));
+        u64 acc_u = (static_cast<u64>(rsp.vu().get_accumulator_high(i) & 0xFFFF) << 32) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_mid(i) & 0xFFFF) << 16) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_low(i) & 0xFFFF));
+        s64 acc = (static_cast<s64>(acc_u << 16) >> 16) + product;
+        
+        u16 hi = (acc >> 32) & 0xFFFF;
+        u16 md = (acc >> 16) & 0xFFFF;
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
+        rsp.vu().set_accumulator_low(i, acc & 0xFFFF);
+        
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = 0x0000;
+        } else if (sh != 0 || sm < 0) {
+            vd_val = 0xFFFF;
+        } else {
+            vd_val = md;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -330,13 +368,28 @@ u8 VMADL(RSP& rsp, const RSPInstruction& instr)
         u16 element_vt = rsp.vu().get_vt_element(vt, i, e);
         
         u32 product = static_cast<u32>(element_vs) * static_cast<u32>(element_vt);
-        s32 acc_31_0 = product + rsp.vu().get_accumulator_mid(i);
-
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, acc_31_0 >> 16);
-        rsp.vu().set_accumulator_low(i, acc_31_0 & 0xFFFF);
         
-        rsp.vu().write_element(vd, i, clamp_signed(acc_31_0 & 0xFFFF));
+        u64 acc_u = (static_cast<u64>(rsp.vu().get_accumulator_high(i) & 0xFFFF) << 32) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_mid(i) & 0xFFFF) << 16) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_low(i) & 0xFFFF));
+        s64 acc = (static_cast<s64>(acc_u << 16) >> 16) + static_cast<s64>(product >> 16);
+        
+        u16 hi = (acc >> 32) & 0xFFFF;
+        u16 md = (acc >> 16) & 0xFFFF;
+        u16 lo = acc & 0xFFFF;
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
+        rsp.vu().set_accumulator_low(i, lo);
+        
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = (hi != 0xFFFF || sm >= 0) ? 0x0000 : lo;
+        } else {
+            vd_val = (hi != 0x0000 || sm < 0) ? 0xFFFF : lo;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -353,13 +406,27 @@ u8 VMADM(RSP& rsp, const RSPInstruction& instr)
         u16 element_vt = rsp.vu().get_vt_element(vt, i, e);
         
         s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
-        s32 acc_31_0 = product + rsp.vu().get_accumulator_low(i) + (rsp.vu().get_accumulator_mid(i) << 16);
-
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, acc_31_0 >> 16);
-        rsp.vu().set_accumulator_low(i, acc_31_0 & 0xFFFF);
         
-        rsp.vu().write_element(vd, i, clamp_signed(acc_31_0 >> 16));
+        u64 acc_u = (static_cast<u64>(rsp.vu().get_accumulator_high(i) & 0xFFFF) << 32) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_mid(i) & 0xFFFF) << 16) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_low(i) & 0xFFFF));
+        s64 acc = (static_cast<s64>(acc_u << 16) >> 16) + static_cast<s64>(product);
+        
+        u16 hi = (acc >> 32) & 0xFFFF;
+        u16 md = (acc >> 16) & 0xFFFF;
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
+        rsp.vu().set_accumulator_low(i, acc & 0xFFFF);
+        
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = (hi != 0xFFFF || sm >= 0) ? 0x8000 : md;
+        } else {
+            vd_val = (hi != 0x0000 || sm < 0) ? 0x7FFF : md;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -375,14 +442,29 @@ u8 VMADN(RSP& rsp, const RSPInstruction& instr)
         u16 element_vs = rsp.vu().read_element(vs, i);
         s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, e));
         
-        s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
-        s32 acc_31_0 = product + rsp.vu().get_accumulator_low(i) + (rsp.vu().get_accumulator_mid(i) << 16);
-
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, acc_31_0 >> 16);
-        rsp.vu().set_accumulator_low(i, acc_31_0 & 0xFFFF);
+        s64 product = static_cast<s64>(static_cast<s32>(element_vs) * static_cast<s32>(element_vt));
         
-        rsp.vu().write_element(vd, i, clamp_signed(acc_31_0 & 0xFFFF));
+        u64 acc_u = (static_cast<u64>(rsp.vu().get_accumulator_high(i) & 0xFFFF) << 32) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_mid(i) & 0xFFFF) << 16) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_low(i) & 0xFFFF));
+        s64 acc = (static_cast<s64>(acc_u << 16) >> 16) + product;
+        
+        u16 hi = (acc >> 32) & 0xFFFF;
+        u16 md = (acc >> 16) & 0xFFFF;
+        u16 lo = acc & 0xFFFF;
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
+        rsp.vu().set_accumulator_low(i, lo);
+        
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = (hi != 0xFFFF || sm >= 0) ? 0x0000 : lo;
+        } else {
+            vd_val = (hi != 0x0000 || sm < 0) ? 0xFFFF : lo;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -399,13 +481,25 @@ u8 VMADH(RSP& rsp, const RSPInstruction& instr)
         s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, e));
         
         s32 product = static_cast<s32>(element_vs) * static_cast<s32>(element_vt);
-        s32 acc_31_0 = product + (rsp.vu().get_accumulator_mid(i) << 16);
-
-        rsp.vu().set_accumulator_high(i, 0);
-        rsp.vu().set_accumulator_mid(i, acc_31_0 >> 16);
-        rsp.vu().set_accumulator_low(i, acc_31_0 & 0xFFFF);
         
-        rsp.vu().write_element(vd, i, clamp_signed(acc_31_0 >> 16));
+        u64 acc_u = (static_cast<u64>(rsp.vu().get_accumulator_high(i) & 0xFFFF) << 32) |
+                    (static_cast<u64>(rsp.vu().get_accumulator_mid(i) & 0xFFFF) << 16);
+        s32 result = static_cast<s32>(acc_u >> 16) + product;
+        
+        u16 hi = (result >> 16) & 0xFFFF;
+        u16 md = result & 0xFFFF;
+        rsp.vu().set_accumulator_high(i, hi);
+        rsp.vu().set_accumulator_mid(i, md);
+        
+        s16 sh = static_cast<s16>(hi);
+        s16 sm = static_cast<s16>(md);
+        u16 vd_val;
+        if (sh < 0) {
+            vd_val = (hi != 0xFFFF || sm >= 0) ? 0x8000 : md;
+        } else {
+            vd_val = (hi != 0x0000 || sm < 0) ? 0x7FFF : md;
+        }
+        rsp.vu().write_element(vd, i, vd_val);
     }
     return 1;
 }
@@ -487,9 +581,7 @@ u8 VADDC(RSP& rsp, const RSPInstruction& instr)
         if (result > 0xFFFF) {
             new_vc0 |= 1 << i;
         }
-        if ((result & 0xFFFF) != 0) {
-            new_vc0 |= 1 << (i + 8);
-        }
+
         rsp.vu().write_element(vd, i, result);
         rsp.vu().set_accumulator_low(i, result);
     }
@@ -503,22 +595,19 @@ u8 VSUBC(RSP& rsp, const RSPInstruction& instr)
     u32 vs = instr.v_type.vs;
     u32 vd = instr.v_type.vd;
     u32 e = instr.v_type.e;
-    u16 new_vc0 = 0;
+    u16 carry = 0, notequal = 0;
     for (u32 i = 0; i < 8; i++) {
-        s32 element_vs = sign_extend16(static_cast<s16>(rsp.vu().read_element(vs, i)));
-        s32 element_vt = sign_extend16(static_cast<s16>(rsp.vu().get_vt_element(vt, i, e)));
-        s32 result = element_vs - element_vt;
+        u32 element_vs = rsp.vu().read_element(vs, i);
+        u32 element_vt = rsp.vu().get_vt_element(vt, i, e);
+        u32 result = element_vs - element_vt;
 
-        if (result < 0) {
-            new_vc0 |= 1 << i;
-        }
-        if ((result & 0xFFFF) != 0) {
-            new_vc0 |= 1 << (i + 8);
-        }
-        rsp.vu().write_element(vd, i, result);
-        rsp.vu().set_accumulator_low(i, result);
+        carry |= ((result >> 16) & 1) << i;
+        notequal |= (result != 0 ? 1 : 0) << i;
+
+        rsp.vu().write_element(vd, i, result & 0xFFFF);
+        rsp.vu().set_accumulator_low(i, result & 0xFFFF);
     }
-    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, new_vc0);
+    rsp.vu().write_control_register(VU_CONTROL_REGISTER_VCO, (notequal << 8) | carry);
     return 1;
 }
 
@@ -566,23 +655,18 @@ u8 VEQ(RSP& rsp, const RSPInstruction& instr)
     u32 vs = instr.v_type.vs;
     u32 vd = instr.v_type.vd;
     u32 elem = instr.v_type.e;
-    u32 new_vcc = 0;
-    s16 result = 0;
-
-    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
+    u16 new_vcc = 0;
+    u16 old_vco = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCO);
 
     for (u32 i = 0; i < 8; i++) {
-        bool vce_i = (old_vce >> i) & 1;
+        bool vcoh = (old_vco >> (i + 8)) & 1;
 
-        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
-        s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, elem));
+        u16 element_vs = rsp.vu().read_element(vs, i);
+        u16 element_vt = rsp.vu().get_vt_element(vt, i, elem);
 
-        if ((element_vs == element_vt) && vce_i) {
-            new_vcc |= 1 << i;
-            result = element_vs;
-        } else {
-            result = element_vt;
-        }
+        bool match = !vcoh && (element_vs == element_vt);
+        u16 result = match ? element_vs : element_vt;
+        if (match) new_vcc |= 1 << i;
 
         rsp.vu().set_accumulator_low(i, result);
         rsp.vu().write_element(vd, i, result);
@@ -600,27 +684,17 @@ u8 VNE(RSP& rsp, const RSPInstruction& instr)
     u32 vd = instr.v_type.vd;
     u32 elem = instr.v_type.e;
     u16 new_vcc = 0;
-    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
-    s16 result = 0;
+    u16 old_vco = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCO);
 
     for (u32 i = 0; i < 8; i++) {
-        bool vce_i = (old_vce >> i) & 1;
+        bool vcoh = (old_vco >> (i + 8)) & 1;
 
-        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
-        s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, elem));
+        u16 element_vs = rsp.vu().read_element(vs, i);
+        u16 element_vt = rsp.vu().get_vt_element(vt, i, elem);
 
-        if (element_vs < element_vt) {
-            new_vcc |= 1 << i;
-            result = element_vs;
-        } else if (element_vs > element_vt) {
-            new_vcc |= 1 << i;
-            result = element_vs;
-        } else if ((element_vs == element_vt) && !vce_i) {
-            new_vcc |= 1 << i;
-            result = element_vs;
-        } else {
-            result = element_vt;
-        }
+        bool match = (element_vs != element_vt) || vcoh;
+        u16 result = match ? element_vs : element_vt;
+        if (match) new_vcc |= 1 << i;
 
         rsp.vu().set_accumulator_low(i, result);
         rsp.vu().write_element(vd, i, result);
@@ -639,25 +713,18 @@ u8 VGE(RSP& rsp, const RSPInstruction& instr)
     u32 elem = instr.v_type.e;
     u16 new_vcc = 0;
     u16 old_vco = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCO);
-    u8 old_vce = rsp.vu().read_control_register(VU_CONTROL_REGISTER_VCE);
 
     for (u32 i = 0; i < 8; i++) {
-        bool vco_i = (old_vco >> i) & 1;
-        bool vce_i = (old_vce >> i) & 1;
+        bool vcol = (old_vco >> i) & 1;
+        bool vcoh = (old_vco >> (i + 8)) & 1;
 
         s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
         s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, elem));
-        s16 result;
 
-        if (element_vs > element_vt) {
-            new_vcc |= 1 << i;
-            result = element_vs;
-        } else if ((element_vs == element_vt) && (!vco_i || vce_i)) {
-            new_vcc |= 1 << i;
-            result = element_vs;
-        } else {
-            result = element_vt;
-        }
+        bool match = (element_vs > element_vt) ||
+                     ((element_vs == element_vt) && (!vcol || !vcoh));
+        s16 result = match ? element_vs : element_vt;
+        if (match) new_vcc |= 1 << i;
 
         rsp.vu().set_accumulator_low(i, result);
         rsp.vu().write_element(vd, i, result);
@@ -699,9 +766,8 @@ u8 VCL(RSP& rsp, const RSPInstruction& instr)
             }
             di = le ? -element_vt : element_vs;
         } else {
-            di = element_vs - element_vt;
             if (eq) {
-                ge = di >= 0;
+                ge = static_cast<s32>(static_cast<u16>(element_vs)) - static_cast<s32>(static_cast<u16>(element_vt)) >= 0;
             }
             di = ge ? element_vt : element_vs;
         }
@@ -737,16 +803,18 @@ u8 VCH(RSP& rsp, const RSPInstruction& instr)
         s16 di;
 
         if (sign) {
+            s16 result = element_vs + element_vt;
             ge = element_vt < 0;
-            le = (element_vs + element_vt) <= 0;
-            vce = (element_vs + element_vt) == -1;
-            eq = (element_vs + element_vt) == 0;
+            le = result <= 0;
+            vce = result == -1;
             di = le ? -element_vt : element_vs;
+            eq = (result == 0) || (result == -1);
         } else {
+            s16 result = element_vs - element_vt;
             le = element_vt < 0;
-            ge = (element_vs - element_vt) >= 0;
+            ge = result >= 0;
             vce = false;
-            eq = (element_vs - element_vt) == 0;
+            eq = result == 0;
             di = ge ? element_vt : element_vs;
         }
 
@@ -919,46 +987,21 @@ u8 VNXOR(RSP& rsp, const RSPInstruction& instr)
 // COP2 Accumulator instructions
 u8 VSAR(RSP& rsp, const RSPInstruction& instr)
 {
-    u32 vs = instr.v_type.vs;
     u32 vd = instr.v_type.vd;
     u32 elem = instr.v_type.e;
 
     switch(elem) {
-        case 0:  // ACC high - swap
-            for (u32 i = 0; i < 8; i++) {
-                u16 acc_val = rsp.vu().get_accumulator_high(i);
-                u16 vs_val = rsp.vu().read_element(vs, i);
-                rsp.vu().write_element(vd, i, acc_val);
-                rsp.vu().set_accumulator_high(i, vs_val);
-            }
-            break;
-        case 1:  // ACC mid - swap
-            for (u32 i = 0; i < 8; i++) {
-                u16 acc_val = rsp.vu().get_accumulator_mid(i);
-                u16 vs_val = rsp.vu().read_element(vs, i);
-                rsp.vu().write_element(vd, i, acc_val);
-                rsp.vu().set_accumulator_mid(i, vs_val);
-            }
-            break;
-        case 2:  // ACC low - swap
-            for (u32 i = 0; i < 8; i++) {
-                u16 acc_val = rsp.vu().get_accumulator_low(i);
-                u16 vs_val = rsp.vu().read_element(vs, i);
-                rsp.vu().write_element(vd, i, acc_val);
-                rsp.vu().set_accumulator_low(i, vs_val);
-            }
-            break;
-        case 8:  // ACC high - read only
+        case 8:
             for (u32 i = 0; i < 8; i++) {
                 rsp.vu().write_element(vd, i, rsp.vu().get_accumulator_high(i));
             }
             break;
-        case 9:  // ACC mid - read only
+        case 9:
             for (u32 i = 0; i < 8; i++) {
                 rsp.vu().write_element(vd, i, rsp.vu().get_accumulator_mid(i));
             }
             break;
-        case 10: // ACC low - read only
+        case 10:
             for (u32 i = 0; i < 8; i++) {
                 rsp.vu().write_element(vd, i, rsp.vu().get_accumulator_low(i));
             }
@@ -981,36 +1024,32 @@ u8 VRCP(RSP& rsp, const RSPInstruction& instr)
     u32 de = instr.v_type.vs & 7;
     
     s32 input = static_cast<s16>(rsp.vu().read_element(vt, e & 7));
-    s32 data = (input < 0) ? -input : input;
+    s32 mask = input >> 31;
+    s32 data = input ^ mask;
+    if (input > -32768) data -= mask;
     
     s32 result;
-    if (data != 0) {
+    if (data == 0) {
+        result = 0x7FFFFFFF;
+    } else if (input == -32768) {
+        result = 0xFFFF0000;
+    } else {
         u32 shift = 0;
-        while (!(data & (1 << 15)) && shift < 16) {
+        while (!(data & (1 << 31)) && shift < 32) {
             data <<= 1;
             shift++;
         }
-        
-        u32 index = (data >> 6) & 0x1FF;
-        
-        u32 reciprocal = rsp.vu().get_reciprocal(index);
-        result = (0x10000 | reciprocal) << 14;
-        result >>= (31 - shift);
-    } else {
-        result = 0x7FFFFFFF;
+        u32 index = (data >> 22) & 0x1FF;
+        result = (0x10000 | rsp.vu().get_reciprocal(index)) << 14;
+        result = result >> (31 - shift) ^ mask;
     }
     
-    if (input < 0) {
-        result = ~result;
-    }
+    rsp.vu().set_div_dp(false);
+    rsp.vu().set_div_out(result >> 16);
     
-    rsp.vu().set_div_out(result);
-    
-    u16 vt_element = rsp.vu().read_element(vt, e & 7);
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, vt_element);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
-    
     rsp.vu().write_element(vd, de, result & 0xFFFF);
     return 1;
 }
@@ -1019,53 +1058,42 @@ u8 VRCPL(RSP& rsp, const RSPInstruction& instr)
 {
     u32 vt = instr.v_type.vt;
     u32 vd = instr.v_type.vd;
-    u32 e = instr.v_type.e & 7;
+    u32 e = instr.v_type.e;
     u32 de = instr.v_type.vs & 7;
     
     s32 input;
     if (rsp.vu().get_div_dp()) {
-        // Double precision: high from VRCPH, low from current element
-        input = rsp.vu().get_div_in() | rsp.vu().read_element(vt, e);
+        input = rsp.vu().get_div_in() << 16 | rsp.vu().read_element(vt, e & 7);
     } else {
-        // Single precision: sign extend 16-bit to 32-bit
-        input = static_cast<s16>(rsp.vu().read_element(vt, e));
+        input = static_cast<s16>(rsp.vu().read_element(vt, e & 7));
     }
     
-    s32 data = (input < 0) ? -input : input;
+    s32 mask = input >> 31;
+    s32 data = input ^ mask;
+    if (input > -32768) data -= mask;
     
     s32 result;
-    if (data != 0) {
-        // Count leading zeros for 32-bit value
+    if (data == 0) {
+        result = 0x7FFFFFFF;
+    } else if (input == -32768) {
+        result = 0xFFFF0000;
+    } else {
         u32 shift = 0;
         while (!(data & (1 << 31)) && shift < 32) {
             data <<= 1;
             shift++;
         }
-        
-        // Extract 9-bit index (bits 30:22 after normalization)
         u32 index = (data >> 22) & 0x1FF;
-        
-        // Get reciprocal and reconstruct
-        u32 reciprocal = rsp.vu().get_reciprocal(index);
-        result = (0x10000 | reciprocal) << 14;
-        result >>= (31 - shift);
-    } else {
-        result = 0x7FFFFFFF;
+        result = (0x10000 | rsp.vu().get_reciprocal(index)) << 14;
+        result = result >> (31 - shift) ^ mask;
     }
     
-    if (input < 0) {
-        result = ~result;
-    }
-    
-    rsp.vu().set_div_out(result);
     rsp.vu().set_div_dp(false);
+    rsp.vu().set_div_out(result >> 16);
     
-    // Broadcast VT[e] to all ACC lows
-    u16 vt_element = rsp.vu().read_element(vt, e);
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, vt_element);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
-    
     rsp.vu().write_element(vd, de, result & 0xFFFF);
     return 1;
 }
@@ -1075,16 +1103,15 @@ u8 VRCPH(RSP& rsp, const RSPInstruction& instr)
     u32 vt = instr.v_type.vt;
     u32 de = instr.v_type.vs & 7;
     u32 vd = instr.v_type.vd;
-    u32 e = instr.v_type.e & 7;
+    u32 e = instr.v_type.e;
 
-    s32 element_vt = static_cast<s32>(rsp.vu().read_element(vt, e));
-    rsp.vu().set_div_in(element_vt << 16);
+    rsp.vu().set_div_in(rsp.vu().read_element(vt, e & 7));
     rsp.vu().set_div_dp(true);
 
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, element_vt);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
-    rsp.vu().write_element(vd, de, rsp.vu().get_div_out() >> 16);
+    rsp.vu().write_element(vd, de, rsp.vu().get_div_out());
     return 1;
 }
 
@@ -1093,14 +1120,12 @@ u8 VMOV(RSP& rsp, const RSPInstruction& instr)
     u32 vt = instr.v_type.vt;
     u32 de = instr.v_type.vs & 7;
     u32 vd = instr.v_type.vd;
-    u32 e = instr.v_type.e & 7;
+    u32 e = instr.v_type.e;
 
-    u16 vt_element = rsp.vu().read_element(vt, e);
-    rsp.vu().write_element(vd, de, vt_element);
-    
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, vt_element);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
+    rsp.vu().write_element(vd, de, rsp.vu().get_vt_element(vt, de, e));
     return 1;
 }
 
@@ -1108,42 +1133,36 @@ u8 VRSQ(RSP& rsp, const RSPInstruction& instr)
 {
     u32 vt = instr.v_type.vt;
     u32 vd = instr.v_type.vd;
-    u32 e = instr.v_type.e & 7;
+    u32 e = instr.v_type.e;
     u32 de = instr.v_type.vs & 7;
     
-    s32 input = static_cast<s16>(rsp.vu().read_element(vt, e));
-    s32 data = (input < 0) ? -input : input;
+    s32 input = static_cast<s16>(rsp.vu().read_element(vt, e & 7));
+    s32 mask = input >> 31;
+    s32 data = input ^ mask;
+    if (input > -32768) data -= mask;
     
     s32 result;
-    if (data != 0) {
-        // Count leading zeros for 16-bit value
+    if (data == 0) {
+        result = 0x7FFFFFFF;
+    } else if (input == -32768) {
+        result = 0xFFFF0000;
+    } else {
         u32 shift = 0;
-        while (!(data & (1 << 15)) && shift < 16) {
+        while (!(data & (1 << 31)) && shift < 32) {
             data <<= 1;
             shift++;
         }
-        
-        // Index includes shift parity (even/odd affects sqrt)
-        u32 index = ((data >> 6) & 0x1FE) | ((shift & 1) ^ 1);
-        
-        u32 sqrt_recip = rsp.vu().get_square_root(index);
-        result = (0x10000 | sqrt_recip) << 14;
-        result >>= ((31 - shift) >> 1);  // divide shift by 2 for sqrt
-    } else {
-        result = 0x7FFFFFFF;
+        u32 index = (data >> 22) & 0x1FF;
+        result = (0x10000 | rsp.vu().get_square_root((index & 0x1FE) | (shift & 1))) << 14;
+        result = result >> ((31 - shift) >> 1) ^ mask;
     }
     
-    if (input < 0) {
-        result = ~result;
-    }
+    rsp.vu().set_div_dp(false);
+    rsp.vu().set_div_out(result >> 16);
     
-    rsp.vu().set_div_out(result);
-    
-    u16 vt_element = rsp.vu().read_element(vt, e);
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, vt_element);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
-    
     rsp.vu().write_element(vd, de, result & 0xFFFF);
     return 1;
 }
@@ -1152,49 +1171,42 @@ u8 VRSQL(RSP& rsp, const RSPInstruction& instr)
 {
     u32 vt = instr.v_type.vt;
     u32 vd = instr.v_type.vd;
-    u32 e = instr.v_type.e & 7;
+    u32 e = instr.v_type.e;
     u32 de = instr.v_type.vs & 7;
     
     s32 input;
     if (rsp.vu().get_div_dp()) {
-        input = rsp.vu().get_div_in() | rsp.vu().read_element(vt, e);
+        input = rsp.vu().get_div_in() << 16 | rsp.vu().read_element(vt, e & 7);
     } else {
-        input = static_cast<s16>(rsp.vu().read_element(vt, e));
+        input = static_cast<s16>(rsp.vu().read_element(vt, e & 7));
     }
     
-    s32 data = (input < 0) ? -input : input;
+    s32 mask = input >> 31;
+    s32 data = input ^ mask;
+    if (input > -32768) data -= mask;
     
     s32 result;
-    if (data != 0) {
-        // Count leading zeros for 32-bit value
+    if (data == 0) {
+        result = 0x7FFFFFFF;
+    } else if (input == -32768) {
+        result = 0xFFFF0000;
+    } else {
         u32 shift = 0;
         while (!(data & (1 << 31)) && shift < 32) {
             data <<= 1;
             shift++;
         }
-        
-        // Index includes shift parity
-        u32 index = ((data >> 22) & 0x1FE) | ((shift & 1) ^ 1);
-        
-        u32 sqrt_recip = rsp.vu().get_square_root(index);
-        result = (0x10000 | sqrt_recip) << 14;
-        result >>= ((31 - shift) >> 1);
-    } else {
-        result = 0x7FFFFFFF;
+        u32 index = (data >> 22) & 0x1FF;
+        result = (0x10000 | rsp.vu().get_square_root((index & 0x1FE) | (shift & 1))) << 14;
+        result = result >> ((31 - shift) >> 1) ^ mask;
     }
     
-    if (input < 0) {
-        result = ~result;
-    }
-    
-    rsp.vu().set_div_out(result);
     rsp.vu().set_div_dp(false);
+    rsp.vu().set_div_out(result >> 16);
     
-    u16 vt_element = rsp.vu().read_element(vt, e);
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, vt_element);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
-    
     rsp.vu().write_element(vd, de, result & 0xFFFF);
     return 1;
 }
@@ -1204,23 +1216,37 @@ u8 VRSQH(RSP& rsp, const RSPInstruction& instr)
     u32 vt = instr.v_type.vt;
     u32 de = instr.v_type.vs & 7;
     u32 vd = instr.v_type.vd;
-    u32 e = instr.v_type.e & 7;
+    u32 e = instr.v_type.e;
 
-    rsp.vu().set_div_in(rsp.vu().read_element(vt, e) << 16);
+    rsp.vu().set_div_in(rsp.vu().read_element(vt, e & 7));
     rsp.vu().set_div_dp(true);
     
-    u16 vt_element = rsp.vu().read_element(vt, e);
     for (u32 i = 0; i < 8; i++) {
-        rsp.vu().set_accumulator_low(i, vt_element);
+        rsp.vu().set_accumulator_low(i, rsp.vu().get_vt_element(vt, i, e));
     }
-    
-    rsp.vu().write_element(vd, de, rsp.vu().get_div_out() >> 16);
+    rsp.vu().write_element(vd, de, rsp.vu().get_div_out());
     return 1;
 }
 
 u8 VNOP(RSP& rsp, const RSPInstruction& instr)
 {
-    // No operation
+    return 1;
+}
+
+u8 VRESERVED(RSP& rsp, const RSPInstruction& instr)
+{
+    u32 vs = instr.v_type.vs;
+    u32 vt = instr.v_type.vt;
+    u32 vd = instr.v_type.vd;
+    u32 e = instr.v_type.e;
+
+    for (u32 i = 0; i < 8; i++) {
+        s16 element_vs = static_cast<s16>(rsp.vu().read_element(vs, i));
+        s16 element_vt = static_cast<s16>(rsp.vu().get_vt_element(vt, i, e));
+        s32 result = static_cast<s32>(element_vs) + static_cast<s32>(element_vt);
+        rsp.vu().set_accumulator_low(i, result & 0xFFFF);
+        rsp.vu().write_element(vd, i, 0);
+    }
     return 1;
 }
 
@@ -1367,14 +1393,16 @@ u8 LTV(RSP& rsp, const RSPInstruction& instr)
     s32 offset = instr.l_type.offset << 4;
     u32 address = base + offset;
     u32 vt = instr.l_type.vt & 0x18;
-    u32 start_element = instr.l_type.element >> 1;
+    u32 element = instr.l_type.element >> 1;
+    u32 base_addr = address & ~0xF;
 
     for (u32 i = 0; i < 8; i++) {
-        u32 mem_addr = ((address + i * 2) & 0x00000FFF) + n64::memory::RSP_DATA_MEMORY_START_ADDRESS;
+        u32 mem_offset = ((element + i) * 2) & 0xF;
+        u32 mem_addr = ((base_addr + mem_offset) & 0x00000FFF) + n64::memory::RSP_DATA_MEMORY_START_ADDRESS;
         u8 hi = rsp.read<u8>(mem_addr);
         u8 lo = rsp.read<u8>(mem_addr + 1);
         u16 value = (hi << 8) | lo;
-        u32 reg = vt | ((i + start_element) & 0x07);
+        u32 reg = vt | ((i + element) & 0x07);
         rsp.vu().write_element(reg, i, value);
     }
 
@@ -1523,15 +1551,13 @@ u8 SWV(RSP& rsp, const RSPInstruction& instr)
     u32 base = rsp.su().read_gpr(instr.l_type.base);
     s32 offset = instr.l_type.offset << 4;
     u32 address = base + offset;
-    u32 vt = instr.l_type.vt & 0x18;
-    u32 start_element = instr.l_type.element >> 1;
+    u32 base_addr = address & ~0xF;
+    u32 element = instr.l_type.element;
 
-    for (u32 i = 0; i < 8; i++) {
-        u32 reg = vt | ((i + start_element) & 0x07);
-        u32 elem = (i + start_element) & 0x07;
-        u16 value = rsp.vu().read_element(reg, elem);
-        rsp.write<u8>(((address + i * 2) & 0x00000FFF) + n64::memory::RSP_DATA_MEMORY_START_ADDRESS, value >> 8);
-        rsp.write<u8>(((address + i * 2 + 1) & 0x00000FFF) + n64::memory::RSP_DATA_MEMORY_START_ADDRESS, value & 0x00FF);
+    for (u32 i = 0; i < 16; i++) {
+        u8 value = rsp.vu().read_element_byte(instr.l_type.vt, (element + i) & 0xF);
+        u32 mem_addr = ((base_addr + ((address + i) & 0xF)) & 0x00000FFF) + n64::memory::RSP_DATA_MEMORY_START_ADDRESS;
+        rsp.write<u8>(mem_addr, value);
     }
 
     return 1;

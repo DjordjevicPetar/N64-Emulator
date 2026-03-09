@@ -8,7 +8,19 @@ RSPInstructionTable::RSPInstructionTable()
         entry = {"UNKNOWN", RSPInstructionType::SCALAR_TYPE, nullptr};
     }
     for (auto& entry : special_table_) {
-        entry = {"UNKNOWN", RSPInstructionType::VECTOR_TYPE, nullptr};
+        entry = {"UNKNOWN", RSPInstructionType::SCALAR_TYPE, nullptr};
+    }
+    for (auto& entry : cop2_compute_table_) {
+        entry = {"RESERVED", RSPInstructionType::VECTOR_TYPE, VRESERVED};
+    }
+    for (auto& entry : cop2_move_table_) {
+        entry = {"RESERVED", RSPInstructionType::VECTOR_TYPE, VRESERVED};
+    }
+    for (auto& entry : lwc2_table_) {
+        entry = {"RESERVED", RSPInstructionType::VECTOR_TYPE, VRESERVED};
+    }
+    for (auto& entry : swc2_table_) {
+        entry = {"RESERVED", RSPInstructionType::VECTOR_TYPE, VRESERVED};
     }
 
     // Main table
@@ -117,6 +129,7 @@ RSPInstructionTable::RSPInstructionTable()
     cop2_compute_table_[0x35] = {"VRSQL", RSPInstructionType::VECTOR_TYPE, VRSQL};
     cop2_compute_table_[0x36] = {"VRSQH", RSPInstructionType::VECTOR_TYPE, VRSQH};
     cop2_compute_table_[0x37] = {"VNOP", RSPInstructionType::VECTOR_TYPE, VNOP};
+    cop2_compute_table_[0x3F] = {"VNULL", RSPInstructionType::VECTOR_TYPE, VNOP};
 
     // LWC2 table
     lwc2_table_[0x00] = {"LBV", RSPInstructionType::VECTOR_TYPE, LBV};
@@ -129,6 +142,7 @@ RSPInstructionTable::RSPInstructionTable()
     lwc2_table_[0x07] = {"LUV", RSPInstructionType::VECTOR_TYPE, LUV};
     lwc2_table_[0x08] = {"LHV", RSPInstructionType::VECTOR_TYPE, LHV};
     lwc2_table_[0x09] = {"LFV", RSPInstructionType::VECTOR_TYPE, LFV};
+    lwc2_table_[0x0A] = {"LWV", RSPInstructionType::VECTOR_TYPE, VNOP};
     lwc2_table_[0x0B] = {"LTV", RSPInstructionType::VECTOR_TYPE, LTV};
 
     // SWC2 table

@@ -4,7 +4,10 @@
 
 namespace n64::rcp {
 
-VU::VU() : gpr_{}, accumulator_{0}, vcc_{0}, vco_{0}, vce_{0} {}
+VU::VU() : gpr_{}, accumulator_{0}, vcc_{0}, vco_{0}, vce_{0} {
+    init_reciprocal_table_();
+    init_square_root_table_();
+}
 
 VU::~VU() = default;
 

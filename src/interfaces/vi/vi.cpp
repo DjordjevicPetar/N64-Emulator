@@ -143,16 +143,19 @@ void VI::process_passed_cycles(u32 cycles) {
     }
     
     cycles_counter_ += cycles;
-    // h_total is in 1/4 pixel units, dividing by 4 gives pixels per line
-    u64 cycles_to_render_half_line = (h_total_.h_total + 1) / 4;
+
+    // h_total is in VI clock units (VI DAC runs at ~48.68 MHz for NTSC)
+    // CPU runs at 93.75 MHz. h_total covers one full scan line.
+    // v_current counts half-lines, so divide by 2.
+    static constexpr double CPU_FREQ = 93750000.0;
+    static constexpr double VI_FREQ  = 48681812.0;
+    u64 cycles_to_render_half_line = static_cast<u64>((h_total_.h_total + 1) * CPU_FREQ / VI_FREQ / 2.0);
+
     
-    // Safety check to prevent infinite loop
     if (cycles_to_render_half_line == 0) {
         cycles_to_render_half_line = 1;
     }
 
-    // v_total is already in half-lines (525 for NTSC, 625 for PAL)
-    // v_current counts half-lines from 0 to v_total
     u32 v_current_max = v_total_.v_total;
     
     while (cycles_counter_ >= cycles_to_render_half_line) {
@@ -161,11 +164,20 @@ void VI::process_passed_cycles(u32 cycles) {
         u32 old_v_current = v_current_.v_current;
         v_current_.v_current = (v_current_.v_current + 1) % (v_current_max + 1);
         
-        // Detect frame boundary (wrap around)
+        // Field wrap: toggle field bit for interlaced modes
         if (v_current_.v_current < old_v_current) {
             if (ctrl_.serrate) {
-                v_current_.v_current ^= 1;  // Toggle field bit (bit 0)
+                v_current_.v_current ^= 1;
             }
+            if (v_video_.v_end == 0) {
+                renderer_.render_frame();
+            }
+        }
+        
+        // Render at end of active display period (v_video.v_end).
+        // This captures the framebuffer after the RDP finishes the current frame
+        // but before the CPU starts the next frame's rendering at WaitScanline.
+        if (v_video_.v_end > 0 && old_v_current < v_video_.v_end && v_current_.v_current >= v_video_.v_end) {
             renderer_.render_frame();
         }
         

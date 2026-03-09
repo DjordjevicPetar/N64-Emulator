@@ -54,7 +54,10 @@ void CP0::set_reg(u8 index, u64 value) {
             compare_ = static_cast<u32>(value);
             cause_.timer_int = 0;
             break;
-        case 12: status_.raw = static_cast<u32>(value) & 0xFF57FFFF; break;
+        case 12: 
+            status_.raw = static_cast<u32>(value) & 0xFF57FFFF;
+            cpu_.cp1().set_fr_bit(status_.fr);
+            break;
         case 13: 
             // Only IP0 and IP1 (bits 8-9) are writable in CAUSE
             cause_.raw = (cause_.raw & ~0x300) | (static_cast<u32>(value) & 0x300);

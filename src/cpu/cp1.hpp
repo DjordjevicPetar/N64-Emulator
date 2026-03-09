@@ -89,11 +89,15 @@ public:
     void set_condition_bit(bool value);
     [[nodiscard]] bool get_condition_bit() const;
 
+    void set_fr_bit(bool fr) { fr_bit_ = fr; }
+    [[nodiscard]] bool get_fr_bit() const { return fr_bit_; }
+
 private:
     // 32 64-bit registers (can be accessed as 32 singles or 16 doubles depending on FR bit)
     std::array<u64, 32> fpr_{};
     FCStatusReg status_;
     RevisionReg revision_;
+    bool fr_bit_ = false;
 };
 
 } // namespace n64::cpu

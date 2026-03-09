@@ -21,10 +21,11 @@ RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp, memory::RDRAM& rdram)
     , vu_()
     , dmem_()
     , imem_()
-    , dma_spaddr_{.raw = 0}
-    , dma_ramaddr_{.raw = 0}
-    , dma_rdlen_{.raw = 0}
-    , dma_wrlen_{.raw = 0}
+    , pending_spmem_(0)
+    , pending_rdram_(0)
+    , current_spmem_(0)
+    , current_rdram_(0)
+    , current_len_(0xFF8)
     , status_{.raw = 0}
     , semaphore_(0)
     , pc_(0)
@@ -32,7 +33,6 @@ RSP::RSP(interfaces::MI& mi, rdp::RDP& rdp, memory::RDRAM& rdram)
     , delay_branch_pending_(false)
     , dma_(*this, rdram)
 {
-    // RSP starts halted - CPU must explicitly start it
     status_.halt = 1;
 }
 RSP::~RSP() {}
@@ -86,13 +86,12 @@ void RSP::write(u32 address, T value) {
 u32 RSP::read_register(u32 address) const {
     switch (address) {
         case RSP_REGISTERS_ADDRESS::RSP_DMA_SPADDR:
-            return dma_spaddr_.raw;
+            return current_spmem_;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RAMADDR:
-            return dma_ramaddr_.raw;
+            return current_rdram_;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RDLEN:
-            return dma_rdlen_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_WRLEN:
-            return dma_wrlen_.raw;
+            return current_len_;
         case RSP_REGISTERS_ADDRESS::RSP_STATUS:
             return status_.raw;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_FULL:
@@ -111,35 +110,49 @@ u32 RSP::read_register(u32 address) const {
 void RSP::write_register(u32 address, u32 value) {
     switch (address) {
         case RSP_REGISTERS_ADDRESS::RSP_DMA_SPADDR:
-            dma_spaddr_.raw = value & 0x00001FF8;  // 8-byte aligned
+            pending_spmem_ = value & 0x00001FF8;
             return;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_RAMADDR:
-            dma_ramaddr_.raw = value & 0x00FFFFF8;  // 8-byte aligned
+            pending_rdram_ = value & 0x00FFFFF8;
             return;
-        case RSP_REGISTERS_ADDRESS::RSP_DMA_RDLEN:
-            dma_rdlen_.raw = value;
+        case RSP_REGISTERS_ADDRESS::RSP_DMA_RDLEN: {
+            RSPDmaLen len;
+            len.raw = value & 0xFF8FFFF8;
+            current_spmem_ = pending_spmem_;
+            current_rdram_ = pending_rdram_;
+            bool is_imem = (pending_spmem_ >> 12) & 1;
+            u32 sp_addr = pending_spmem_ & 0xFFF;
+            u32 rdram_addr = pending_rdram_ & 0xFFFFFF;
             dma_.add_request(DMARequest(
                 true,                       // is_read: RDRAM -> SP
-                dma_spaddr_.bank,           // is_imem
-                dma_spaddr_.address,        // sp_address
-                dma_ramaddr_.address,       // rdram_address  
-                dma_rdlen_.length + 1,      // start_length
-                dma_rdlen_.count + 1,       // count
-                dma_rdlen_.skip             // skip
+                is_imem,
+                sp_addr,
+                rdram_addr,
+                len.length + 8,             // 8-byte aligned transfer size
+                len.count,
+                len.skip
             ));
             return;
-        case RSP_REGISTERS_ADDRESS::RSP_DMA_WRLEN:
-            dma_wrlen_.raw = value;
+        }
+        case RSP_REGISTERS_ADDRESS::RSP_DMA_WRLEN: {
+            RSPDmaLen len;
+            len.raw = value & 0xFF8FFFF8;
+            current_spmem_ = pending_spmem_;
+            current_rdram_ = pending_rdram_;
+            bool is_imem = (pending_spmem_ >> 12) & 1;
+            u32 sp_addr = pending_spmem_ & 0xFFF;
+            u32 rdram_addr = pending_rdram_ & 0xFFFFFF;
             dma_.add_request(DMARequest(
                 false,                      // is_read: SP -> RDRAM
-                dma_spaddr_.bank,           // is_imem
-                dma_spaddr_.address,        // sp_address
-                dma_ramaddr_.address,       // rdram_address
-                dma_wrlen_.length + 1,      // start_length
-                dma_wrlen_.count + 1,       // count
-                dma_wrlen_.skip             // skip
+                is_imem,
+                sp_addr,
+                rdram_addr,
+                len.length + 8,             // 8-byte aligned transfer size
+                len.count,
+                len.skip
             ));
             return;
+        }
         case RSP_REGISTERS_ADDRESS::RSP_STATUS: {
             // clr/set pairs - if both set, no change
             clear_set_resolver(status_.raw, get_bit(value, 0),  get_bit(value, 1),  0);  // halt
@@ -215,7 +228,7 @@ void RSP::process_passed_cycles(u32 cycles)
 void RSP::delay_branch(u32 target)
 {
     delay_branch_pending_ = true;
-    delay_pc_ = target;
+    delay_pc_ = target & 0xFFF;
 }
 
 void RSP::set_breakpoint()
@@ -230,10 +243,10 @@ void RSP::set_breakpoint()
 u32 RSP::read_cop0(u32 reg) const
 {
     switch (reg) {
-        case 0: return dma_spaddr_.raw;
-        case 1: return dma_ramaddr_.raw;
-        case 2: return dma_rdlen_.raw;
-        case 3: return dma_wrlen_.raw;
+        case 0: return current_spmem_;
+        case 1: return current_rdram_;
+        case 2: return current_len_;
+        case 3: return current_len_;
         case 4: return status_.raw;
         case 5: return status_.dma_full;
         case 6: return status_.dma_busy;
@@ -273,10 +286,17 @@ RSPInstruction RSP::fetch_instruction()
 {
     u32 instruction = 0;
     for (size_t i = 0; i < sizeof(u32); i++) {
-        instruction = (instruction << 8) | imem_[pc_ + i];
+        instruction = (instruction << 8) | imem_[pc_];
+        pc_ = (pc_ + 1) & 0xFFF;
     }
-    pc_ += 4;
     return RSPInstruction(instruction);
+}
+
+void RSP::on_dma_complete(u32 final_sp_addr, u32 final_rdram_addr, bool is_imem, u32 skip)
+{
+    current_spmem_ = (static_cast<u32>(is_imem) << 12) | (final_sp_addr & 0xFF8);
+    current_rdram_ = final_rdram_addr & 0x00FFFFF8;
+    current_len_ = (skip << 20) | 0xFF8;
 }
 
 template u8 RSP::read<u8>(u32) const;

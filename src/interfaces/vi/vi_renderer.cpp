@@ -91,7 +91,8 @@ void VIRenderer::render_frame() {
                 red = ((pixel >> 11) & 0x1F) << 3;
                 green = ((pixel >> 6) & 0x1F) << 3;
                 blue = ((pixel >> 1) & 0x1F) << 3;
-                alpha = (pixel & 0x1) ? 255 : 0;
+                // Bit 0 is coverage, not display alpha - always show pixel
+                alpha = 255;
             }
             // NOTE: type=1 is reserved/undefined on real hardware
 

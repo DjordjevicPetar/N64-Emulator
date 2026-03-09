@@ -60,7 +60,7 @@ u32 N64System::boot()
             rom_.read<u8>(memory::ROM_START_ADDRESS + ROM_CODE_OFFSET + i)
         );
     }
-    
+
     return entry_point;
 }
 
@@ -74,6 +74,7 @@ void N64System::run()
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
         pi_.process_passed_cycles(cycles);
+        rdp_.process_passed_cycles(cycles);
         // TODO: Process AI cycles for audio playback timing
         cpu_.cp0().set_mi_interrupt(mi_.check_interrupts());
 

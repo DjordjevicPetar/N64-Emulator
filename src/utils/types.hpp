@@ -45,6 +45,16 @@ static_assert(sizeof(f64) == 8, "f64 must be 8 bytes");
     return static_cast<s64>(static_cast<s8>(value));
 }
 
+[[nodiscard]] constexpr s32 sign_extend_n(u32 value, u8 n) {
+    u32 sign_bit = 1u << (n - 1);
+    return static_cast<s32>((value ^ sign_bit) - sign_bit);
+}
+
+// Sign-extend 9-bit to 16-bit
+[[nodiscard]] constexpr s16 sign_extend9(u16 value) {
+    return static_cast<s16>(static_cast<s16>(value << 7) >> 7);
+}
+
 // Sign-extend 16-bit to 64-bit
 [[nodiscard]] constexpr s64 sign_extend16(u16 value) {
     return static_cast<s64>(static_cast<s16>(value));

@@ -32,6 +32,7 @@ public:
 
     void process_passed_cycles(u32 cycles);
     bool handle_events() { return renderer_.handle_events(); }
+    [[nodiscard]] u32 color_image_size() const { return (ctrl_.type == 3) ? 32 : 16; }
 
 private:
     MI& mi_;

@@ -66,6 +66,10 @@ void RSPDMA::process_transfer(u32 cycles)
         request.length -= 1;
         if (request.length == 0) {
             if (request.count == 0) {
+                rsp_.on_dma_complete(
+                    request.sp_address, request.rdram_address,
+                    request.is_imem, request.skip
+                );
                 request_queue_.pop();
                 if (request_queue_.empty()) {
                     rsp_.status().dma_busy = 0;

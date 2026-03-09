@@ -54,6 +54,8 @@ public:
     void write_dmem(u32 address, u8 value) { dmem_[address] = value; }
     void write_imem(u32 address, u8 value) { imem_[address] = value; }
 
+    void on_dma_complete(u32 final_sp_addr, u32 final_rdram_addr, bool is_imem, u32 skip);
+
 private:
 
     [[nodiscard]] RSPInstruction fetch_instruction();
@@ -67,10 +69,15 @@ private:
     std::array<u8, 4096> dmem_;
     std::array<u8, 4096> imem_;
 
-    RSPDmaSPAddr dma_spaddr_;
-    RSPDmaRamAddr dma_ramaddr_;
-    RSPDmaLen dma_rdlen_;
-    RSPDmaLen dma_wrlen_;
+    // Pending registers (set by CPU writes, latched into current when DMA triggers)
+    u32 pending_spmem_ = 0;
+    u32 pending_rdram_ = 0;
+
+    // Current registers (readable by CPU, updated during/after DMA)
+    u32 current_spmem_ = 0;
+    u32 current_rdram_ = 0;
+    u32 current_len_ = 0xFF8;
+
     RSPStatus status_;
     u32 semaphore_;
     u32 pc_;

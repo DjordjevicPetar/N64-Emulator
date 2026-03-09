@@ -62,6 +62,7 @@ u8 VRSQ(RSP& rsp, const RSPInstruction& instr);
 u8 VRSQL(RSP& rsp, const RSPInstruction& instr);
 u8 VRSQH(RSP& rsp, const RSPInstruction& instr);
 u8 VNOP(RSP& rsp, const RSPInstruction& instr);
+u8 VRESERVED(RSP& rsp, const RSPInstruction& instr);
 
 // LWC2 - Vector loads
 u8 LBV(RSP& rsp, const RSPInstruction& instr);

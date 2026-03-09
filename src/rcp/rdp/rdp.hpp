@@ -4,6 +4,7 @@
 #include "rdp_registers.hpp"
 #include <array>
 #include "color_combiner.hpp"
+#include "blender.hpp"
 
 namespace n64::memory {
 class RDRAM;
@@ -55,6 +56,10 @@ struct Tile {
     bool mirror_s;
     u8 mask_s;
     u8 shift_s;
+    u16 upper_left_s;
+    u16 upper_left_t;
+    u16 lower_right_s;
+    u16 lower_right_t;
 };
 
 class RDP {
@@ -70,47 +75,48 @@ public:
     [[nodiscard]] u32 read_register(u32 address) const;
     void write_register(u32 address, u32 value);
 
+    void process_passed_cycles(u32 cycles);
+
     // Accessors
     [[nodiscard]] const DPCStatus& status() const { return status_; }
 
 private:
-    using CommandHandler = void (RDP::*)(u64);
+    using CommandHandler = u32 (RDP::*)(u64);
 
-    void run_commands();
-    void execute_commands();
+    f32 cycle_accumulator_ = 0;
 
-    // Command handlers
-    void nop(u64 command);
-    void triangle(u64 command);
-    void texture_rectangle(u64 command);
-    void texture_rectangle_flip(u64 command);
-    void sync_load(u64 command);
-    void sync_pipe(u64 command);
-    void sync_tile(u64 command);
-    void sync_full(u64 command);
-    void set_key_gb(u64 command);
-    void set_key_r(u64 command);
-    void set_convert(u64 command);
-    void set_scissor(u64 command);
-    void set_primitive_depth(u64 command);
-    void set_other_modes(u64 command);
-    void load_tlut(u64 command);
-    void set_tile_size(u64 command);
-    void load_block(u64 command);
-    void load_tile(u64 command);
-    void set_tile(u64 command);
-    void fill_rectangle(u64 command);
-    void copy_rectangle(u16 right, u16 bottom, u16 left, u16 top);
-    void fill_rectangle(u16 right, u16 bottom, u16 left, u16 top);
-    void set_fill_color(u64 command);
-    void set_fog_color(u64 command);
-    void set_blend_color(u64 command);
-    void set_primitive_color(u64 command);
-    void set_environment_color(u64 command);
-    void set_combine_mode(u64 command);
-    void set_texture_image(u64 command);
-    void set_depth_image(u64 command);
-    void set_color_image(u64 command);
+    // Command handlers (return cycle cost)
+    u32 nop(u64 command);
+    u32 triangle(u64 command);
+    u32 texture_rectangle(u64 command);
+    u32 texture_rectangle_flip(u64 command);
+    u32 sync_load(u64 command);
+    u32 sync_pipe(u64 command);
+    u32 sync_tile(u64 command);
+    u32 sync_full(u64 command);
+    u32 set_key_gb(u64 command);
+    u32 set_key_r(u64 command);
+    u32 set_convert(u64 command);
+    u32 set_scissor(u64 command);
+    u32 set_primitive_depth(u64 command);
+    u32 set_other_modes(u64 command);
+    u32 load_tlut(u64 command);
+    u32 set_tile_size(u64 command);
+    u32 load_block(u64 command);
+    u32 load_tile(u64 command);
+    u32 set_tile(u64 command);
+    u32 fill_rectangle(u64 command);
+    u32 copy_rectangle(u16 right, u16 bottom, u16 left, u16 top);
+    u32 fill_rectangle(u16 right, u16 bottom, u16 left, u16 top);
+    u32 set_fill_color(u64 command);
+    u32 set_fog_color(u64 command);
+    u32 set_blend_color(u64 command);
+    u32 set_primitive_color(u64 command);
+    u32 set_environment_color(u64 command);
+    u32 set_combine_mode(u64 command);
+    u32 set_texture_image(u64 command);
+    u32 set_depth_image(u64 command);
+    u32 set_color_image(u64 command);
 
     // Helper functions
     [[nodiscard]] float bytes_per_pixel(Size size) const;
@@ -120,8 +126,13 @@ private:
 
     [[nodiscard]] Color fetch_pixel_tmem(u32 addr, Size size, Format format, bool odd_texel, u8 palette = 0) const;
     void write_pixel_framebuffer(u32 addr, const Color& color);
+    [[nodiscard]] Color read_pixel_framebuffer(u32 addr) const;
     bool is_pixel_transparent(const Color& color) const;
-    void process_tmem_coordinates(s32& coord, u8 shift, u8 mask, bool mirror) const;
+    void process_tmem_coordinates(s32& coord, u8 shift, u8 mask, bool mirror, bool clamp, u16 lower_limit, u16 upper_limit) const;
+    void process_pixel(u32 fb_addr, s32 x, const Tile& tile,
+                       s32 tex_s, s32 tex_t,
+                       const Color& shade,
+                       bool has_texture, bool has_shade);
 
     memory::RDRAM& rdram_;
     n64::interfaces::MI& mi_;
@@ -175,15 +186,6 @@ private:
     bool key_enable_ = false;
     u8 rgb_dither_sel_ = 0;
     u8 alpha_dither_sel_ = 0;
-    u8 bl_m1a_0_ = 0;
-    u8 bl_m1a_1_ = 0;
-    u8 bl_m1b_0_ = 0;
-    u8 bl_m1b_1_ = 0;
-    u8 bl_ma_0_ = 0;
-    u8 bl_ma_1_ = 0;
-    u8 bl_mb_0_ = 0;
-    u8 bl_mb_1_ = 0;
-    bool force_blend_ = false;
     u8 alpha_cvg_select_ = 0;
     bool cvg_x_alpha_ = false;
     u8 z_mode_ = 0;
@@ -202,6 +204,9 @@ private:
 
     // Color combiner state (from Set_Combine_Mode)
     ColorCombiner color_combiner_;
+
+    // Blender state (from Set_Blender_Mode)
+    Blender blender_;
 
     // Texture memory
     std::array<u8, 4096> tmem_;

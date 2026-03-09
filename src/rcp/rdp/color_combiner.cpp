@@ -31,12 +31,24 @@ void ColorCombiner::set_environment_color(u64 command) {
     environment_color_.set_color_32b(get_bits(command, 31, 0), Format::FORMAT_RGB);
 }
 
-void ColorCombiner::set_fog_color(u64 command) {
-    fog_color_.set_color_32b(get_bits(command, 31, 0), Format::FORMAT_RGB);
+void ColorCombiner::set_yuv_constants(u64 command) {
+    k0_ = sign_extend9(get_bits(command, 53, 45));
+    k1_ = sign_extend9(get_bits(command, 44, 36));
+    k2_ = sign_extend9(get_bits(command, 35, 27));
+    k3_ = sign_extend9(get_bits(command, 26, 18));
+    k4_ = sign_extend9(get_bits(command, 17, 9));
+    k5_ = sign_extend9(get_bits(command, 8, 0));
 }
 
-void ColorCombiner::set_blend_color(u64 command) {
-    blend_color_.set_color_32b(get_bits(command, 31, 0), Format::FORMAT_RGB);
+Color ColorCombiner::convert_yuv(s32 Y, s32 U, s32 V) const {
+    s32 u = U - 128;
+    s32 v = V - 128;
+    Color color;
+    color.red   = static_cast<u8>(std::clamp(Y + ((k0_ * v) >> 7), 0, 255));
+    color.green = static_cast<u8>(std::clamp(Y + ((k1_ * u + k2_ * v) >> 7), 0, 255));
+    color.blue  = static_cast<u8>(std::clamp(Y + ((k3_ * u) >> 7), 0, 255));
+    color.alpha = Y;
+    return color;
 }
 
 // (A - B) * C + D per channel
@@ -100,7 +112,7 @@ Color ColorCombiner::select_b(const Color& texel, const Color& shade) const {
         case 4:  result.red = shade.red; result.green = shade.green; result.blue = shade.blue; break;
         case 5:  result.red = environment_color_.red; result.green = environment_color_.green; result.blue = environment_color_.blue; break;
         case 6:  result.red = 0; result.green = 0; result.blue = 0; break; // TODO: KEY_CENTER
-        case 7:  result.red = 0; result.green = 0; result.blue = 0; break; // TODO: K4
+        case 7:  result.red = k4_; result.green = k4_; result.blue = k4_; break; // TODO: K4
         default: result.red = 0; result.green = 0; result.blue = 0; break;
     }
 
@@ -140,7 +152,7 @@ Color ColorCombiner::select_c(const Color& texel, const Color& shade) const {
         case 12: result.red = environment_color_.alpha; result.green = environment_color_.alpha; result.blue = environment_color_.alpha; break;
         case 13: result.red = 0; result.green = 0; result.blue = 0; break; // TODO: LOD_FRACTION
         case 14: result.red = prim_lod_fraction_; result.green = prim_lod_fraction_; result.blue = prim_lod_fraction_; break;
-        case 15: result.red = 0; result.green = 0; result.blue = 0; break; // TODO: K5
+        case 15: result.red = k5_; result.green = k5_; result.blue = k5_; break; // TODO: K5
         default: result.red = 0; result.green = 0; result.blue = 0; break;
     }
 
