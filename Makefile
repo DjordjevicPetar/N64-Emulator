@@ -15,13 +15,16 @@ CXX := g++
 CXXFLAGS := -std=c++20 -O3 -Wall -I./src $(shell pkg-config --cflags sdl3)
 LDFLAGS := $(shell pkg-config --libs sdl3)
 
-.PHONY: clean build run
+.PHONY: clean build debug run
 
 clean:
 	-$(RM) $(TARGET)
 
 build: clean
 	$(CXX) $(CXXFLAGS) $(SOURCES) -o $(TARGET) $(LDFLAGS)
+    
+debug: clean
+	$(CXX) $(CXXFLAGS) -DRDP_LOG -O0 -g $(SOURCES) -o $(TARGET) $(LDFLAGS)
 
 run: build
 	$(RUN_PREFIX)$(TARGET) $(ARGS)

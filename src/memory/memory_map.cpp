@@ -61,7 +61,7 @@ T MemoryMap::read(u32 address)
 
     // AI
     if (address >= AI_START_ADDRESS && address <= AI_END_ADDRESS) {
-        return ai_.read_register(address);
+        return ai_.read<T>(address);
     }
 
     // RI

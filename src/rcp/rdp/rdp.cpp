@@ -1,4 +1,5 @@
 #include "rdp.hpp"
+#include "rdp_log.hpp"
 #include "../../memory/rdram.hpp"
 #include "../../interfaces/mi.hpp"
 
@@ -10,36 +11,31 @@ namespace n64::rdp {
 
 // RDP implementation roadmap:
 //
-// Phase 1 - Command processing: DONE
-// Phase 2 - Basic rendering: DONE (Fill_Rectangle, Set_Color_Image, Set_Scissor)
-// Phase 3 - Copy mode textures: DONE (Load_Block, Load_Tile, Texture_Rectangle copy)
-// Phase 4 - 1-cycle mode: DONE (Color combiner, Texture_Rectangle/Flip, shift/mask/mirror)
-// Phase 5 - Color registers: DONE (Primitive, Environment, Fog, Blend colors)
-// Phase 6 - Texture formats: DONE (RGBA 16b/32b, IA 16b/8b/4b, I 8b/4b, CI 4b/8b + TLUT palettes)
-// Phase 7 - YUV + Set_Tile_Size: DONE (UYVY decode, K0-K5 convert, Set_Tile_Size clamping)
+// Phase 1  - Command processing: DONE
+// Phase 2  - Basic rendering: DONE (Fill_Rectangle, Set_Color_Image, Set_Scissor)
+// Phase 3  - Copy mode textures: DONE (Load_Block, Load_Tile, Texture_Rectangle copy)
+// Phase 4  - 1-cycle mode: DONE (Color combiner, Texture_Rectangle/Flip, shift/mask/mirror)
+// Phase 5  - Color registers: DONE (Primitive, Environment, Fog, Blend colors)
+// Phase 6  - Texture formats: DONE (RGBA 16b/32b, IA 16b/8b/4b, I 8b/4b, CI 4b/8b + TLUT palettes)
+// Phase 7  - YUV + Set_Tile_Size: DONE (UYVY decode, K0-K5 convert, Set_Tile_Size clamping)
+// Phase 8  - Triangles & Lines: DONE (Edge walking, Gouraud shading, S/T/W interpolation, sub-span correction)
+// Phase 9  - Z-buffer: DONE (Depth compare/update, Set_Depth_Image, Set_Primitive_Depth, Z source select)
+// Phase 10 - Fixed-point refactor: DONE (FixedPointFloat S.15.16 class used throughout)
+// Phase 11 - 2-cycle mode & combiner: DONE (COMBINED, TEXEL1, LOD_FRAC, PRIM_LOD_FRAC, KEY_CENTER, KEY_SCALE)
+// Phase 12 - Alpha pipeline: DONE (Alpha compare, alpha coverage, cvg_dest modes, chroma key)
+// Phase 13 - Dithering: DONE (RGB + alpha dither with Bayer/magic square/noise matrices)
 //
-// Phase 8 - Triangles (CURRENT):
-// TODO: Implement edge walking rasterizer (Fill/Shade/Texture/Z triangle variants)
-// TODO: Implement per-pixel S/T/W interpolation and perspective correction
-// TODO: Implement Gouraud shading (per-vertex RGBA interpolation)
-//
-// Phase 9 - Blender & Z-buffer:
-// TODO: Implement blender (alpha blending, fog, anti-aliasing, coverage)
-// TODO: Implement Z-buffer read/write/compare + Set_Depth_Image + Set_Primitive_Depth
-//
-// Phase 10 - 2-cycle mode & combiner completeness:
-// TODO: Implement 2-cycle mode (two combiner+blender passes per pixel)
-// TODO: Implement COMBINED input (output of cycle 0 fed into cycle 1)
-// TODO: Implement TEXEL1 input (second texture tile for multitexturing)
-// TODO: Implement LOD_FRACTION, KEY_CENTER, KEY_SCALE combiner inputs
-//
-// Phase 11 - Accuracy & advanced:
-// TODO: Implement bilinear texture filtering (sample_type)
-// TODO: Implement LOD / detail / sharpen texture modes
-// TODO: Implement coverage calculation and anti-aliasing
-// TODO: Implement dithering (RGB and alpha)
-// TODO: Implement XBUS mode (commands from RSP DMEM instead of RDRAM)
-// TODO: Implement cycle-accurate RDP timing
+// Remaining work:
+// TODO: Combiner 9-bit overflow precision (special_9bit_clamptable, inter-cycle 9-bit passing)
+// TODO: Bilinear texture filtering (sample_type, bi_lerp_0/1, mid_texel)
+// TODO: Texture LOD / detail / sharpen (lod_fraction calculation, tile level selection)
+// TODO: Anti-aliasing (proper sub-pixel coverage, blender AA integration)
+// TODO: Fog blending (shade alpha as fog factor -- may already work via blender wiring)
+// TODO: DXT row-swapping in load_block (odd-row byte-swap for dual-bank TMEM)
+// TODO: Framebuffer 4b/8b write/read support
+// TODO: Sub-pixel coverage (4x4 sub-pixel grid instead of current heuristic)
+// TODO: XBUS mode (commands from RSP DMEM)
+// TODO: Cycle-accurate RDP timing
 
 RDP::RDP(memory::RDRAM& rdram, n64::interfaces::MI& mi)
     : rdram_(rdram)
@@ -137,21 +133,11 @@ void RDP::write_register(u32 address, u32 value) {
             break;
         case DPC_END:
             end_.raw = value & 0x00FFFFF8;  // 24-bit, 64-bit aligned
-            if (!status_.start_pending) {
-                // Incremental transfer: continue/restore from CURRENT to new END
-                // Works whether previous transfer is running or already finished
-                status_.dma_busy = 1;
-            } else if (!status_.dma_busy) {
-                // New transfer: no transfer running, start from START to END
+            if (status_.start_pending) {
                 current_.raw = start_.raw;
                 status_.start_pending = 0;
-                status_.dma_busy = 1;
-            } else {
-                // New transfer requested but current transfer still running:
-                // queue it as pending, will start when current transfer finishes
-                // Further writes to DPC_END just update the pending end address
-                status_.end_pending = 1;
             }
+            process_command_list();
             break;
         case DPC_STATUS: {
             // Clear counters
@@ -174,32 +160,31 @@ void RDP::write_register(u32 address, u32 value) {
     }
 }
 
-void RDP::process_passed_cycles(u32 cycles) {
-    if (!status_.dma_busy) {
-        cycle_accumulator_ = 0;
-        return;
-    }
-
-    cycle_accumulator_ += cycles * (2.0f / 3.0f);
-
-    while (current_.raw < end_.raw && cycle_accumulator_ > 0) {
+void RDP::process_command_list() {
+#ifdef RDP_LOG
+    static constexpr const char* cmd_names[64] = {
+        "Nop","Nop","Nop","Nop","Nop","Nop","Nop","Nop",
+        "Fill_Tri","Fill_ZB_Tri","Tex_Tri","Tex_ZB_Tri","Shade_Tri","Shade_ZB_Tri","ShTx_Tri","ShTxZB_Tri",
+        "Nop","Nop","Nop","Nop","Nop","Nop","Nop","Nop",
+        "Nop","Nop","Nop","Nop","Nop","Nop","Nop","Nop",
+        "Nop","Nop","Nop","Nop","Tex_Rect","Tex_Rect_Flip","Sync_Load","Sync_Pipe",
+        "Sync_Tile","Sync_Full","Set_Key_GB","Set_Key_R","Set_Convert","Set_Scissor","Set_PrimDepth","Set_Other_Modes",
+        "Load_TLUT","Nop","Set_Tile_Size","Load_Block","Load_Tile","Set_Tile","Fill_Rect","Set_Fill_Color",
+        "Set_Fog_Color","Set_Blend_Color","Set_Prim_Color","Set_Env_Color","Set_Combine","Set_Tex_Image","Set_Z_Image","Set_Color_Image",
+    };
+#endif
+    while (current_.raw < end_.raw) {
         u64 command = rdram_.read_memory<u64>(current_.raw);
         u8 command_id = (command >> 56) & 0x3F;
+        RDP_LOG_CMD("0x%02X %s raw=%016llX", command_id, cmd_names[command_id], (unsigned long long)command);
         current_.raw += 8;
-        u32 cost = (this->*command_table_[command_id])(command);
-        cycle_accumulator_ -= cost;
+        (this->*command_table_[command_id])(command);
     }
+    status_.dma_busy = 0;
+}
 
-    if (current_.raw >= end_.raw) {
-        status_.dma_busy = 0;
-
-        if (status_.end_pending) {
-            status_.end_pending = 0;
-            current_.raw = start_.raw;
-            status_.start_pending = 0;
-            status_.dma_busy = 1;
-        }
-    }
+void RDP::process_passed_cycles(u32 cycles) {
+    (void)cycles;
 }
 
 // ============================================================================
@@ -217,10 +202,15 @@ u32 RDP::sync_full(u64 command) {
     return 8;
 }
 
-// TODO: Parse chroma key width/center/scale for green and blue channels
-u32 RDP::set_key_gb(u64 command) { return 8; }
-// TODO: Parse chroma key width/center/scale for red channel
-u32 RDP::set_key_r(u64 command) { return 8; }
+u32 RDP::set_key_gb(u64 command) {
+    color_combiner_.set_key_gb(command);
+    return 8;
+}
+
+u32 RDP::set_key_r(u64 command) {
+    color_combiner_.set_key_r(command);
+    return 8;
+}
 
 u32 RDP::set_convert(u64 command) {
     color_combiner_.set_yuv_constants(command);
@@ -228,17 +218,21 @@ u32 RDP::set_convert(u64 command) {
 }
 
 u32 RDP::set_scissor(u64 command) {
-    scissor_.upper_left_x = get_bits(command, 55, 44) >> 2;
-    scissor_.upper_left_y = get_bits(command, 43, 32) >> 2;
-    scissor_.interlace_enable = get_bit(command, 25);
-    scissor_.odd_even = get_bit(command, 24);
-    scissor_.lower_right_x = get_bits(command, 23, 12) >> 2;
-    scissor_.lower_right_y = get_bits(command, 11, 0) >> 2;
+    scissor_ = Scissor(command);
+    scissor_enable_ = true;
+    RDP_LOG_STATE("scissor: (%d,%d)-(%d,%d) interlace=%d odd=%d",
+        scissor_.scissor_rect.left.integer(), scissor_.scissor_rect.top.integer(),
+        scissor_.scissor_rect.right.integer(), scissor_.scissor_rect.bottom.integer(),
+        scissor_.interlace_enable, scissor_.odd_even);
     return 8;
 }
 
-// TODO: Parse z and deltaz for primitive Z-buffer source
-u32 RDP::set_primitive_depth(u64 command) { return 8; }
+u32 RDP::set_primitive_depth(u64 command) { 
+    z_prim_depth_ = get_bits(command, 31, 16);
+    dz_prim_depth_ = get_bits(command, 15, 0);
+    RDP_LOG_STATE("prim_depth: z=%u dz=%u", z_prim_depth_, dz_prim_depth_);
+    return 8;
+}
 
 u32 RDP::set_other_modes(u64 command) {
     atomic_prim_ = get_bit(command, 55);
@@ -254,7 +248,7 @@ u32 RDP::set_other_modes(u64 command) {
     bi_lerp_0_ = get_bit(command, 43);
     bi_lerp_1_ = get_bit(command, 42);
     convert_one_ = get_bit(command, 41);
-    key_enable_ = get_bit(command, 40);
+    color_combiner_.set_key_enable(get_bit(command, 40));
     rgb_dither_sel_ = (command >> 38) & 0x03;
     alpha_dither_sel_ = (command >> 36) & 0x03;
     // 35 - 32: Unused
@@ -272,6 +266,15 @@ u32 RDP::set_other_modes(u64 command) {
     z_source_select_ = get_bit(command, 2);
     dither_alpha_enable_ = get_bit(command, 1);
     alpha_compare_enable_ = get_bit(command, 0);
+    static constexpr const char* cycle_names[] = {"1cycle", "2cycle", "copy", "fill"};
+    RDP_LOG_STATE("other_modes: cycle=%s persp=%d lod=%d tlut=%d sample=%s bi0=%d bi1=%d conv1=%d key=%d "
+        "rgb_dith=%u a_dith=%u force_blend=%d a_cvg_sel=%d cvg_x_a=%d z_mode=%u cvg_dst=%u "
+        "z_upd=%d z_cmp=%d aa=%d z_src=%d a_cmp=%d",
+        cycle_names[cycle_type_], perspective_texture_enable_, texture_lod_enable_, tlut_enable_,
+        sample_type_ ? "2x2" : "1x1", bi_lerp_0_, bi_lerp_1_, convert_one_,
+        get_bit(command, 40), rgb_dither_sel_, alpha_dither_sel_,
+        get_bit(command, 14), alpha_cvg_select_, cvg_x_alpha_, z_mode_, cvg_dest_,
+        z_update_enable_, z_compare_enable_, antialiasing_enable_, z_source_select_, alpha_compare_enable_);
     return 8;
 }
 
@@ -286,6 +289,7 @@ u32 RDP::set_tile_size(u64 command) {
     tiles_[tile_index].upper_left_t = tl;
     tiles_[tile_index].lower_right_s = sh;
     tiles_[tile_index].lower_right_t = th;
+    RDP_LOG_STATE("tile_size[%u]: uls=%u ult=%u lrs=%u lrt=%u", tile_index, sl, tl, sh, th);
     return 8;
 }
 
@@ -309,37 +313,67 @@ u32 RDP::set_tile(u64 command) {
     tiles_[index].mirror_s = get_bit(command, 8);
     tiles_[index].mask_s = get_bits(command, 7, 4);
     tiles_[index].shift_s = get_bits(command, 3, 0);
+    static constexpr const char* fmt_names[] = {"RGBA","YUV","CI","IA","I","?","?","?"};
+    static constexpr const char* size_names[] = {"4b","8b","16b","32b"};
+    RDP_LOG_STATE("tile[%d]: fmt=%s size=%s line=%u addr=0x%03X pal=%u "
+        "mask_s=%u mask_t=%u mir_s=%d mir_t=%d clamp_s=%d clamp_t=%d shift_s=%u shift_t=%u",
+        index, fmt_names[(u8)tiles_[index].format], size_names[(u8)tiles_[index].size],
+        tiles_[index].line, tiles_[index].address, tiles_[index].palette,
+        tiles_[index].mask_s, tiles_[index].mask_t,
+        tiles_[index].mirror_s, tiles_[index].mirror_t,
+        tiles_[index].clamp_s, tiles_[index].clamp_t,
+        tiles_[index].shift_s, tiles_[index].shift_t);
     return 8;
 }
 
 u32 RDP::set_fill_color(u64 command) {
     fill_color_ = get_bits(command, 31, 0);
+    RDP_LOG_STATE("fill_color: 0x%08X", fill_color_);
     return 8;
 }
 
 u32 RDP::set_fog_color(u64 command) {
     blender_.set_fog_color(command);
+    RDP_LOG_STATE("fog_color: R=%u G=%u B=%u A=%u",
+        (u32)get_bits(command, 31, 24), (u32)get_bits(command, 23, 16), (u32)get_bits(command, 15, 8), (u32)get_bits(command, 7, 0));
     return 8;
 }
 
 u32 RDP::set_blend_color(u64 command) {
     blender_.set_blend_color(command);
+    RDP_LOG_STATE("blend_color: R=%u G=%u B=%u A=%u",
+        (u32)get_bits(command, 31, 24), (u32)get_bits(command, 23, 16), (u32)get_bits(command, 15, 8), (u32)get_bits(command, 7, 0));
     return 8;
 }
 
 u32 RDP::set_primitive_color(u64 command) {
     color_combiner_.set_primitive_color(command);
+    RDP_LOG_STATE("prim_color: R=%u G=%u B=%u A=%u min_level=%u lod_frac=%u",
+        (u32)get_bits(command, 31, 24), (u32)get_bits(command, 23, 16), (u32)get_bits(command, 15, 8), (u32)get_bits(command, 7, 0),
+        (u32)get_bits(command, 44, 40), (u32)get_bits(command, 39, 32));
     return 8;
 }
 
 u32 RDP::set_environment_color(u64 command) {
     color_combiner_.set_environment_color(command);
+    RDP_LOG_STATE("env_color: R=%u G=%u B=%u A=%u",
+        (u32)get_bits(command, 31, 24), (u32)get_bits(command, 23, 16), (u32)get_bits(command, 15, 8), (u32)get_bits(command, 7, 0));
     return 8;
 }
 
 u32 RDP::set_combine_mode(u64 command) {
-   color_combiner_.set_combine_mode(command);
-   return 8;
+    color_combiner_.set_combine_mode(command);
+    RDP_LOG_STATE("combine: A_rgb0=%u B_rgb0=%u C_rgb0=%u D_rgb0=%u A_a0=%u B_a0=%u C_a0=%u D_a0=%u "
+        "A_rgb1=%u B_rgb1=%u C_rgb1=%u D_rgb1=%u A_a1=%u B_a1=%u C_a1=%u D_a1=%u",
+        (u32)get_bits(command, 55, 52), (u32)get_bits(command, 31, 28),
+        (u32)get_bits(command, 51, 47), (u32)get_bits(command, 17, 15),
+        (u32)get_bits(command, 46, 44), (u32)get_bits(command, 14, 12),
+        (u32)get_bits(command, 43, 41), (u32)get_bits(command, 11, 9),
+        (u32)get_bits(command, 40, 37), (u32)get_bits(command, 27, 24),
+        (u32)get_bits(command, 36, 32), (u32)get_bits(command, 8, 6),
+        (u32)get_bits(command, 23, 21), (u32)get_bits(command, 5, 3),
+        (u32)get_bits(command, 20, 18), (u32)get_bits(command, 2, 0));
+    return 8;
 }
 
 u32 RDP::set_texture_image(u64 command) {
@@ -347,17 +381,37 @@ u32 RDP::set_texture_image(u64 command) {
     texture_image_.size = static_cast<Size>(get_bits(command, 52, 51));
     texture_image_.width = get_bits(command, 41, 32) + 1;
     texture_image_.addr = get_bits(command, 24, 0);
+    {
+        static constexpr const char* fn[] = {"RGBA","YUV","CI","IA","I","?","?","?"};
+        static constexpr const char* sn[] = {"4b","8b","16b","32b"};
+        RDP_LOG_STATE("tex_image: fmt=%s size=%s width=%u addr=0x%06X",
+            fn[(u8)texture_image_.format], sn[(u8)texture_image_.size], texture_image_.width, texture_image_.addr);
+    }
     return 8;
 }
 
-// TODO: Store depth buffer RDRAM address for Z-buffer operations
-u32 RDP::set_depth_image(u64 command) { return 8; }
+u32 RDP::set_depth_image(u64 command) { 
+    z_buffer_addr_ = get_bits(command, 24, 0);
+    RDP_LOG_STATE("z_image: addr=0x%06X", z_buffer_addr_);
+    return 8;
+}
 
 u32 RDP::set_color_image(u64 command) {
     color_image_.format = static_cast<Format>(get_bits(command, 55, 53));
     color_image_.size = static_cast<Size>(get_bits(command, 52, 51));
     color_image_.width = get_bits(command, 41, 32) + 1;
     color_image_.addr = get_bits(command, 24, 0);
+    {
+        static constexpr const char* fn[] = {"RGBA","YUV","CI","IA","I","?","?","?"};
+        static constexpr const char* sn[] = {"4b","8b","16b","32b"};
+        RDP_LOG_STATE("color_image: fmt=%s size=%s width=%u addr=0x%06X",
+            fn[(u8)color_image_.format], sn[(u8)color_image_.size], color_image_.width, color_image_.addr);
+    }
+
+    u32 needed = color_image_.width * 240;
+    if (needed > cvg_buffer_.size()) {
+        cvg_buffer_.resize(needed, 7);
+    }
     return 8;
 }
 

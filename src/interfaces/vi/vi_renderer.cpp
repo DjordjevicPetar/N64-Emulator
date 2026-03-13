@@ -22,7 +22,6 @@ VIRenderer::~VIRenderer() {
     if (texture_) SDL_DestroyTexture(texture_);
     if (renderer_) SDL_DestroyRenderer(renderer_);
     if (window_) SDL_DestroyWindow(window_);
-    SDL_Quit();
 }
 
 bool VIRenderer::handle_events() {

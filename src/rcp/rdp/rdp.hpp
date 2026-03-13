@@ -3,8 +3,10 @@
 #include "../../utils/types.hpp"
 #include "rdp_registers.hpp"
 #include <array>
+#include <vector>
 #include "color_combiner.hpp"
 #include "blender.hpp"
+#include "fixed_point_float.hpp"
 
 namespace n64::memory {
 class RDRAM;
@@ -18,19 +20,43 @@ namespace n64::rdp {
 
 constexpr u32 TLUT_BASE_ADDRESS = 0x800;
 
-struct Scissor {
-    u16 upper_left_x;
-    u16 upper_left_y;
-    u16 lower_right_x;
-    u16 lower_right_y;
-    bool interlace_enable;
-    bool odd_even;
+struct Rectangle {
+    FixedPointFloat left;
+    FixedPointFloat top;
+    FixedPointFloat right;
+    FixedPointFloat bottom;
 
-    void clip(u16& left, u16& top, u16& right, u16& bottom) {
-        left   = std::max(left,   upper_left_x);
-        top    = std::max(top,    upper_left_y);
-        right  = std::min(right,  lower_right_x);
-        bottom = std::min(bottom, lower_right_y);
+    Rectangle(u64 command) {
+        right  = FixedPointFloat(get_bits(command, 55, 46), get_bits(command, 45, 44), 10, 2, false);
+        bottom = FixedPointFloat(get_bits(command, 43, 34), get_bits(command, 33, 32), 10, 2, false);
+        left   = FixedPointFloat(get_bits(command, 23, 14), get_bits(command, 13, 12), 10, 2, false);
+        top    = FixedPointFloat(get_bits(command, 11, 2), get_bits(command, 1, 0), 10, 2, false);
+    }
+
+    Rectangle() : left(0), top(0), right(0), bottom(0) {}
+};
+
+struct Scissor {
+    Rectangle scissor_rect;
+    bool interlace_enable = false;
+    bool odd_even = false;
+
+    Scissor() = default;
+
+    Scissor(u64 command) {
+        scissor_rect.left   = FixedPointFloat(get_bits(command, 55, 46), get_bits(command, 45, 44), 10, 2, false);
+        scissor_rect.top    = FixedPointFloat(get_bits(command, 43, 34), get_bits(command, 33, 32), 10, 2, false);
+        interlace_enable = get_bit(command, 25);
+        odd_even = get_bit(command, 24);
+        scissor_rect.right  = FixedPointFloat(get_bits(command, 23, 14), get_bits(command, 13, 12), 10, 2, false);
+        scissor_rect.bottom = FixedPointFloat(get_bits(command, 11, 2), get_bits(command, 1, 0), 10, 2, false);
+    }
+
+    void clip(Rectangle& rect) {
+        rect.left   = std::max(rect.left,   scissor_rect.left);
+        rect.top    = std::max(rect.top,    scissor_rect.top);
+        rect.right  = std::min(rect.right,  scissor_rect.right);
+        rect.bottom = std::min(rect.bottom, scissor_rect.bottom);
     }
 };
 
@@ -83,7 +109,6 @@ public:
 private:
     using CommandHandler = u32 (RDP::*)(u64);
 
-    f32 cycle_accumulator_ = 0;
 
     // Command handlers (return cycle cost)
     u32 nop(u64 command);
@@ -106,8 +131,8 @@ private:
     u32 load_tile(u64 command);
     u32 set_tile(u64 command);
     u32 fill_rectangle(u64 command);
-    u32 copy_rectangle(u16 right, u16 bottom, u16 left, u16 top);
-    u32 fill_rectangle(u16 right, u16 bottom, u16 left, u16 top);
+    u32 copy_rectangle(const Rectangle& copy_rect);
+    u32 fill_rectangle(const Rectangle& fill_rect);
     u32 set_fill_color(u64 command);
     u32 set_fog_color(u64 command);
     u32 set_blend_color(u64 command);
@@ -117,6 +142,8 @@ private:
     u32 set_texture_image(u64 command);
     u32 set_depth_image(u64 command);
     u32 set_color_image(u64 command);
+
+    void process_command_list();
 
     // Helper functions
     [[nodiscard]] float bytes_per_pixel(Size size) const;
@@ -129,10 +156,15 @@ private:
     [[nodiscard]] Color read_pixel_framebuffer(u32 addr) const;
     bool is_pixel_transparent(const Color& color) const;
     void process_tmem_coordinates(s32& coord, u8 shift, u8 mask, bool mirror, bool clamp, u16 lower_limit, u16 upper_limit) const;
-    void process_pixel(u32 fb_addr, s32 x, const Tile& tile,
+    void process_pixel(s32 x, s32 y, u8 tile_index,
                        s32 tex_s, s32 tex_t,
-                       const Color& shade,
-                       bool has_texture, bool has_shade);
+                       const Color& shade, s32 z_depth,
+                       u8 pixel_cvg,
+                       bool has_texture, bool has_shade,
+                       int& pix_log_cnt);
+
+    void apply_alpha_dither(s32 x, s32 y, Color& color);
+    void apply_rgb_dither(s32 x, s32 y, Color& color);
 
     memory::RDRAM& rdram_;
     n64::interfaces::MI& mi_;
@@ -161,6 +193,7 @@ private:
 
     // Scissor state (from Set_Scissor)
     Scissor scissor_;
+    bool scissor_enable_ = false;
 
     // Fill color (from Set_Fill_Color)
     u32 fill_color_ = 0;
@@ -184,20 +217,44 @@ private:
     bool bi_lerp_1_ = false;
     bool convert_one_ = false;
     bool key_enable_ = false;
-    u8 rgb_dither_sel_ = 0;
-    u8 alpha_dither_sel_ = 0;
+    u8 z_mode_ = 0;
+    bool image_read_enable_ = false;
+    bool antialiasing_enable_ = false;
+    bool alpha_compare_enable_ = false;
+
+    // Alpha coverage state
+    bool apply_alpha_coverage(u8 pixel_cvg, u32 cvg_index, Color& color);
+    u8 compute_pixel_cvg(s32 x, FixedPointFloat x_left, FixedPointFloat x_right) const;
     u8 alpha_cvg_select_ = 0;
     bool cvg_x_alpha_ = false;
-    u8 z_mode_ = 0;
-    u8 cvg_dest_ = 0;
     bool color_on_cvg_ = false;
-    bool image_read_enable_ = false;
+    u8 cvg_dest_ = 0;
+    std::vector<u8> cvg_buffer_ = std::vector<u8>(640 * 480, 7);
+
+    // Z-buffer state
     bool z_update_enable_ = false;
     bool z_compare_enable_ = false;
-    bool antialiasing_enable_ = false;
     bool z_source_select_ = false;
+    u32 z_buffer_addr_ = 0;
+    u16 z_prim_depth_ = 0;
+    u16 dz_prim_depth_ = 0;
+
+    // Dither state and utilitires
+    u8 rgb_dither_sel_ = 0;
+    u8 alpha_dither_sel_ = 0;
     bool dither_alpha_enable_ = false;
-    bool alpha_compare_enable_ = false;
+    std::array<std::array<u8, 4>, 4> bayer_matrix_ = {{
+        {0, 4, 1, 5},
+        {4, 0, 5, 1},
+        {3, 7, 2, 6},
+        {7, 3, 6, 2}
+    }};
+    std::array<std::array<u8, 4>, 4> magic_square_matrix_ = {{
+        {0, 6, 1, 7},
+        {4, 2, 5, 3},
+        {3, 5, 2, 4},
+        {7, 1, 6, 0}
+    }};
 
     // Texture state (from Set_Texture_Image)
     Image texture_image_;

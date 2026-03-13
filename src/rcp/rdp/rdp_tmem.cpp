@@ -1,4 +1,5 @@
 #include "rdp.hpp"
+#include "rdp_log.hpp"
 #include "../../memory/rdram.hpp"
 
 #include <algorithm>
@@ -126,13 +127,10 @@ Color RDP::read_pixel_framebuffer(u32 addr) const {
 }
 
 bool RDP::is_pixel_transparent(const Color& color) const {
-    // In 1-cycle mode, always skip transparent texels (blender approximation)
-    if (cycle_type_ == 0) {
+    if (cycle_type_ == 2 && alpha_compare_enable_) {
         return color.alpha == 0;
     }
-    // In copy mode, only skip if alpha compare is enabled
-    if (!alpha_compare_enable_) return false;
-    return color.alpha == 0;
+    return false;
 }
 
 void RDP::process_tmem_coordinates(s32& coord, u8 shift, u8 mask, bool mirror, bool clamp, u16 lower_limit, u16 upper_limit) const {
@@ -143,11 +141,8 @@ void RDP::process_tmem_coordinates(s32& coord, u8 shift, u8 mask, bool mirror, b
         coord <<= (16 - shift);
 
     if (clamp) {
-        s32 clamped_coord = std::clamp(coord, static_cast<s32>(lower_limit), static_cast<s32>(upper_limit));
-        if (coord != clamped_coord) {
-            coord = clamped_coord;
-            return;
-        }
+        if (coord < static_cast<s32>(lower_limit)) { coord = lower_limit; return; }
+        if (coord > static_cast<s32>(upper_limit)) { coord = upper_limit; return; }
     }
 
     // 2. Mask + Mirror
@@ -171,6 +166,7 @@ u32 RDP::load_tlut(u64 command) {
         tmem_[(tmem_addr + 0) % 4096] = (color >> 8) & 0xFF;
         tmem_[(tmem_addr + 1) % 4096] = color & 0xFF;
     }
+    RDP_LOG_STATE("load_tlut: sl=%u sh=%u entries=%u src=0x%06X", sl, sh, sh - sl + 1, texture_image_.addr);
     return std::max<u32>(sh - sl + 1, 8);
 }
 
@@ -188,6 +184,8 @@ u32 RDP::load_block(u64 command) {
     for (u16 i = 0; i < total_bytes; i++) {
         tmem_[tmem_addr + i] = rdram_.read_memory<u8>(texture_image_.addr + i);
     }
+    RDP_LOG_STATE("load_block: tile=%u texels=%u bytes=%u tmem=0x%03X src=0x%06X",
+        tile_index, number_of_texels_to_load, total_bytes, tmem_addr, texture_image_.addr);
     return std::max(total_bytes, 8u);
 }
 
@@ -213,6 +211,9 @@ u32 RDP::load_tile(u64 command) {
             total_bytes += bpp;
         }
     }
+    RDP_LOG_STATE("load_tile: tile=%u region=(%u,%u)-(%u,%u) bytes=%u stride=%u src=0x%06X",
+        tile_index, upper_left_s, upper_left_t, lower_right_s, lower_right_t,
+        total_bytes, tmem_line_stride, texture_image_.addr);
     return std::max(total_bytes, 8u);
 }
 

@@ -11,7 +11,7 @@
 
 // Interfaces
 #include "interfaces/mi.hpp"
-#include "interfaces/ai.hpp"
+#include "interfaces/ai/ai.hpp"
 #include "interfaces/vi/vi.hpp"
 #include "interfaces/si.hpp"
 #include "interfaces/ri.hpp"
@@ -25,6 +25,9 @@
 #include "cpu/vr4300.hpp"
 
 namespace n64 {
+
+constexpr u32 CPU_CLOCK = 93750000;
+constexpr u32 VI_CLOCK = CPU_CLOCK * 2 / 3;
 
 class N64System {
 public:

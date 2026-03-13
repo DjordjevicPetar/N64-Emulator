@@ -1,5 +1,6 @@
 #include "n64_system.hpp"
 #include <iostream>
+#include <SDL3/SDL.h>
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -12,8 +13,8 @@ int main(int argc, char* argv[]) {
         n64_system.run();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
-        return 1;
     }
     
+    SDL_Quit();
     return 0;
 }

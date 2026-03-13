@@ -14,19 +14,20 @@ class Blender {
 public:
 
     // Inputs are color that has been processed by the color combiner and the already standing color in the framebuffer
-    [[nodiscard]] Color blend(const Color& combined_color, const Color& framebuffer_color) const;
+    [[nodiscard]] Color blend(const Color& combined_color, const Color& framebuffer_color, const Color& shade, u8 cvg, u8 cycle) const;
 
     void set_blender_input(u16 command_input);
     void set_fog_color(u64 command);
     void set_blend_color(u64 command);
+    [[nodiscard]] u8 get_alpha_threshold(bool dither_alpha_enable) const;
     void set_force_blend(bool force_blend_mode) { force_blend_ = force_blend_mode; };
 
 private:
 
-    [[nodiscard]] Color select_p(const Color& combined_color, const Color& framebuffer_color) const;
-    [[nodiscard]] f32 select_a(const Color& combined_color, const Color& framebuffer_color) const;
-    [[nodiscard]] Color select_m(const Color& combined_color, const Color& framebuffer_color) const;
-    [[nodiscard]] f32 select_b(const Color& combined_color, const Color& framebuffer_color, const f32& a) const;
+    [[nodiscard]] Color select_p(const Color& combined_color, const Color& framebuffer_color, u8 cycle) const;
+    [[nodiscard]] int select_a_5bit(const Color& combined_color, const Color& shade, u8 cycle) const;
+    [[nodiscard]] Color select_m(const Color& combined_color, const Color& framebuffer_color, u8 cycle) const;
+    [[nodiscard]] int select_b_5bit(int a, u8 cvg, u8 cycle) const;
 
     BlenderInput input_p_;
     BlenderInput input_a_;

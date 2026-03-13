@@ -71,35 +71,32 @@ public:
                 alpha = alpha | (alpha << 4);
                 break;
             }
-            case Format::FORMAT_I: {
+            case Format::FORMAT_I:
+            default:
                 red = green = blue = alpha = color;
                 break;
-            }
-            default:
-                throw std::runtime_error("Invalid format: " + std::to_string(static_cast<u8>(format)));
         }
     }
 
     void set_color_4b(u8 color, Format format) {
         switch (format) {
-            case Format::FORMAT_I: {
-                red = green = blue = alpha = color | (color << 4);
-                break;
-            }
             case Format::FORMAT_IA: {
                 u8 i3 = (color >> 1) & 0x07;
                 red = green = blue = (i3 << 5) | (i3 << 2) | (i3 >> 1);
                 alpha = (color & 1) ? 255 : 0;
                 break;
             }
+            case Format::FORMAT_I:
             default:
-                throw std::runtime_error("Invalid format: " + std::to_string(static_cast<u8>(format)));
+                red = green = blue = alpha = color | (color << 4);
+                break;
         }
     }
 
-    static Color randomize() {
-        u8 val = std::rand() & 0xFF;
-        return Color(val, val, val, val);
+    static Color noise() {
+        s32 val = ((std::rand() & 0x07) << 6) | 0x20;
+        u8 clamped = static_cast<u8>(std::min(val, 255));
+        return Color(clamped, clamped, clamped, clamped);
     }
 
     [[nodiscard]] u8 encode_4b() const {
