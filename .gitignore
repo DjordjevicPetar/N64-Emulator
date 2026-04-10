@@ -8,4 +8,4 @@ n64_asan
 *.dSYM/
 *.log
 *.eep
-tmp_*
+tmp_*log.txt
