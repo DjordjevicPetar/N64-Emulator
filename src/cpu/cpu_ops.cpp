@@ -670,6 +670,12 @@ u32 DSRA32(VR4300& cpu, const Instruction& instr) {
 // Jump register
 u32 JR(VR4300& cpu, const Instruction& instr) {
     u64 new_pc = cpu.gpr(instr.r_type.rs);
+    u32 phys = new_pc & 0x1FFFFFFF;
+    static u32 jr_bad_count = 0;
+    if (phys >= 0x00800000 && phys < 0x04000000 && jr_bad_count++ < 5)
+        fprintf(stderr, "[JR] Jump to unmapped addr=0x%08llX (r%u) from PC=0x%08llX\n",
+                (unsigned long long)new_pc, (unsigned)instr.r_type.rs,
+                (unsigned long long)(cpu.pc() - 4));
     cpu.delay_branch(new_pc);
     return 1;
 }
@@ -677,6 +683,12 @@ u32 JR(VR4300& cpu, const Instruction& instr) {
 u32 JALR(VR4300& cpu, const Instruction& instr) {
     cpu.set_gpr(instr.r_type.rd, cpu.pc() + 4);
     u64 new_pc = cpu.gpr(instr.r_type.rs);
+    u32 phys = new_pc & 0x1FFFFFFF;
+    static u32 jalr_bad_count = 0;
+    if (phys >= 0x00800000 && phys < 0x04000000 && jalr_bad_count++ < 5)
+        fprintf(stderr, "[JALR] Jump to unmapped addr=0x%08llX (r%u) from PC=0x%08llX\n",
+                (unsigned long long)new_pc, (unsigned)instr.r_type.rs,
+                (unsigned long long)(cpu.pc() - 4));
     cpu.delay_branch(new_pc);
     return 1;
 }

@@ -33,6 +33,39 @@ u32 VR4300::execute_next_instruction()
     branch_pending_ = false;
 
     read_next_instruction();
+
+    static u32 consecutive_nops = 0;
+    static bool nop_slide_logged = false;
+    static u64 last_real_pc = 0;
+    static u32 last_real_instr = 0;
+    if (current_instruction_.raw == 0x00000000) {
+        consecutive_nops++;
+        if (consecutive_nops == 16 && !nop_slide_logged) {
+            nop_slide_logged = true;
+            fprintf(stderr, "[NOP-SLIDE] Detected at PC=0x%08llX (16 consecutive NOPs)\n"
+                    "  Last real instruction: PC=0x%08llX instr=0x%08X\n"
+                    "  $ra=0x%08llX $sp=0x%08llX $at=0x%08llX\n"
+                    "  $t0=0x%08llX $t1=0x%08llX $v0=0x%08llX\n",
+                    (unsigned long long)(pc_ - 4),
+                    (unsigned long long)last_real_pc, last_real_instr,
+                    (unsigned long long)gpr_[31], (unsigned long long)gpr_[29],
+                    (unsigned long long)gpr_[1],
+                    (unsigned long long)gpr_[8], (unsigned long long)gpr_[9],
+                    (unsigned long long)gpr_[2]);
+        }
+    } else {
+        if (consecutive_nops >= 16 && nop_slide_logged) {
+            fprintf(stderr, "[NOP-SLIDE] Ended at PC=0x%08llX after %u NOPs, "
+                    "now instr=0x%08X\n",
+                    (unsigned long long)(pc_ - 4), consecutive_nops,
+                    current_instruction_.raw);
+            nop_slide_logged = false;
+        }
+        consecutive_nops = 0;
+        last_real_pc = pc_ - 4;
+        last_real_instr = current_instruction_.raw;
+    }
+
     u8 opcode = current_instruction_.i_type.opcode;
     // COP0 is always accessible in kernel mode; CU0 check only applies in user mode
     // Kernel mode = when EXL=0 && ERL=0 && KSU=0, OR when EXL=1 or ERL=1
