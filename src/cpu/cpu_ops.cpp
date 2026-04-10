@@ -1151,12 +1151,20 @@ u32 TLBP(VR4300& cpu, const Instruction& instr) {
 
 u32 ERET(VR4300& cpu, const Instruction& instr) {
     CP0Status& status = cpu.cp0().status();
+    static u64 eret_count = 0;
+    eret_count++;
     if (status.erl) {
         status.erl = 0;
         cpu.set_pc(cpu.cp0().error_epc());
+        if (eret_count <= 30)
+            fprintf(stderr, "[ERET] #%llu ERL->ErrorEPC=0x%08llX\n",
+                    (unsigned long long)eret_count, (unsigned long long)cpu.cp0().error_epc());
     } else {
         status.exl = 0;
         cpu.set_pc(cpu.cp0().epc());
+        if (eret_count <= 30)
+            fprintf(stderr, "[ERET] #%llu EXL->EPC=0x%08llX\n",
+                    (unsigned long long)eret_count, (unsigned long long)cpu.cp0().epc());
     }
     cpu.set_LLbit(false);
     return 1;
