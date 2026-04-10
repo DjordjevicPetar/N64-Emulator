@@ -1,6 +1,7 @@
 #include "memory_map.hpp"
 #include <stdexcept>
 #include <string>
+#include <cstdio>
 
 namespace n64::memory {
 
@@ -89,10 +90,10 @@ T MemoryMap::read(u32 address)
         return pif_.read<T>(address);
     }
     
-    // TODO: Handle RDRAM register reads (0x03F00000-0x03FFFFFF) - currently falls into RDRAM range
-    // TODO: Handle RDP span registers (0x04200000-0x042FFFFF) separately from command registers
-    // TODO: Handle ISViewer debug output (0x13FF0000-0x13FF0020) for homebrew debug prints
-    throw std::runtime_error("Unmapped memory read at address: " + std::to_string(address));
+    static u32 unmapped_read_count = 0;
+    if (unmapped_read_count++ < 20)
+        fprintf(stderr, "[MEM] Unmapped read at 0x%08X\n", address);
+    return 0;
 }
 
 template<typename T>
@@ -158,7 +159,9 @@ void MemoryMap::write(u32 address, T value)
         return;
     }
     
-    throw std::runtime_error("Unmapped memory write at address: " + std::to_string(address));
+    static u32 unmapped_write_count = 0;
+    if (unmapped_write_count++ < 20)
+        fprintf(stderr, "[MEM] Unmapped write at 0x%08X val=0x%08X\n", address, (u32)value);
 }
 
 // Explicit template instantiations

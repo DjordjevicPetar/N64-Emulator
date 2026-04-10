@@ -1,6 +1,7 @@
 #include "rdram.hpp"
 #include <stdexcept>
 #include <string>
+#include <cstdio>
 
 namespace n64::memory {
 
@@ -27,41 +28,37 @@ RDRAM::~RDRAM()
 template <typename T>
 T RDRAM::read_memory(u32 address) const
 {
-    if (address >= RDRAM_MEMORY_START_ADDRESS && address <= RDRAM_MEMORY_END_ADDRESS) {
-        u32 offset = address - RDRAM_MEMORY_START_ADDRESS;
-        T result = 0;
-        for (size_t i = 0; i < sizeof(T); i++) {
-            result = (result << 8) | memory_[offset + i];  // Big-endian read
-        }
-        return result;
-    }
-
     if (address >= RDRAM_REGISTER_START_ADDRESS && address <= RDRAM_REGISTER_END_ADDRESS) {
         u32 reg_offset = address - RDRAM_REGISTER_START_ADDRESS;
         return static_cast<T>(read_register(static_cast<RDRAM_REGISTERS_ADDRESS>(reg_offset)));
     }
-    
-    throw std::runtime_error("Invalid RDRAM address: " + std::to_string(address));
+
+    if (address + sizeof(T) <= RDRAM_MEMORY_SIZE) {
+        T result = 0;
+        for (size_t i = 0; i < sizeof(T); i++) {
+            result = (result << 8) | memory_[address + i];
+        }
+        return result;
+    }
+
+    return 0;
 }
 
 template <typename T>
 void RDRAM::write_memory(u32 address, T value)
 {
-    if (address >= RDRAM_MEMORY_START_ADDRESS && address <= RDRAM_MEMORY_END_ADDRESS) {
-        u32 offset = address - RDRAM_MEMORY_START_ADDRESS;
-        for (size_t i = 0; i < sizeof(T); i++) {
-            memory_[offset + i] = static_cast<u8>(value >> ((sizeof(T) - 1 - i) * 8));  // Big-endian write
-        }
-        return;
-    }
-    
     if (address >= RDRAM_REGISTER_START_ADDRESS && address <= RDRAM_REGISTER_END_ADDRESS) {
         u32 reg_offset = address - RDRAM_REGISTER_START_ADDRESS;
         write_register(static_cast<RDRAM_REGISTERS_ADDRESS>(reg_offset), static_cast<u32>(value));
         return;
     }
-    
-    throw std::runtime_error("Invalid RDRAM address: " + std::to_string(address));
+
+    if (address + sizeof(T) <= RDRAM_MEMORY_SIZE) {
+        for (size_t i = 0; i < sizeof(T); i++) {
+            memory_[address + i] = static_cast<u8>(value >> ((sizeof(T) - 1 - i) * 8));
+        }
+        return;
+    }
 }
 
 u32 RDRAM::read_register(RDRAM_REGISTERS_ADDRESS address) const
@@ -90,7 +87,7 @@ u32 RDRAM::read_register(RDRAM_REGISTERS_ADDRESS address) const
         case RDRAM_REGISTERS_ADDRESS::RDRAM_REGISTER_ROW:
             return row_;
         default:
-            throw std::runtime_error("Invalid RDRAM register address: " + std::to_string(static_cast<u32>(address)));
+            return 0;
     }
 }
 
@@ -131,7 +128,7 @@ void RDRAM::write_register(RDRAM_REGISTERS_ADDRESS address, u32 value)
             row_ = value;
             break;
         default:
-            throw std::runtime_error("Invalid RDRAM register address: " + std::to_string(static_cast<u32>(address)));
+            break;
     }
 }
 
