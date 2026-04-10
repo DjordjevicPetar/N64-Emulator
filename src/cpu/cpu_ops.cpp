@@ -36,7 +36,7 @@ u32 J(VR4300& cpu, const Instruction& instr) {
 }
     
 u32 JAL(VR4300& cpu, const Instruction& instr) {
-    cpu.set_gpr(31, cpu.pc() + 8);
+    cpu.set_gpr(31, cpu.pc() + 4);
     u64 new_pc = set_bits(cpu.pc(), 27, 0, instr.j_type.target_address << 2);
     cpu.delay_branch(new_pc);
     return 1;
@@ -675,7 +675,7 @@ u32 JR(VR4300& cpu, const Instruction& instr) {
 }
 
 u32 JALR(VR4300& cpu, const Instruction& instr) {
-    cpu.set_gpr(instr.r_type.rd, cpu.pc() + 8);
+    cpu.set_gpr(instr.r_type.rd, cpu.pc() + 4);
     u64 new_pc = cpu.gpr(instr.r_type.rs);
     cpu.delay_branch(new_pc);
     return 1;
@@ -1009,7 +1009,7 @@ u32 BGEZL(VR4300& cpu, const Instruction& instr) {
 
 u32 BLTZAL(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.pc() + (sign_extend16(instr.i_type.immediate) << 2);
-    cpu.set_gpr(31, cpu.pc() + 8);
+    cpu.set_gpr(31, cpu.pc() + 4);
     if (static_cast<s64>(cpu.gpr(instr.i_type.rs)) < 0) {
         cpu.delay_branch(address);
     }
@@ -1018,7 +1018,7 @@ u32 BLTZAL(VR4300& cpu, const Instruction& instr) {
 
 u32 BGEZAL(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.pc() + (sign_extend16(instr.i_type.immediate) << 2);
-    cpu.set_gpr(31, cpu.pc() + 8);
+    cpu.set_gpr(31, cpu.pc() + 4);
     if (static_cast<s64>(cpu.gpr(instr.i_type.rs)) >= 0) {
         cpu.delay_branch(address);
     }
@@ -1028,7 +1028,7 @@ u32 BGEZAL(VR4300& cpu, const Instruction& instr) {
 u32 BLTZALL(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.pc() + (sign_extend16(instr.i_type.immediate) << 2);
     if (static_cast<s64>(cpu.gpr(instr.i_type.rs)) < 0) {
-        cpu.set_gpr(31, cpu.pc() + 8);
+        cpu.set_gpr(31, cpu.pc() + 4);
         cpu.delay_branch(address);
     } else {
         cpu.set_pc(cpu.pc() + 4);
@@ -1039,7 +1039,7 @@ u32 BLTZALL(VR4300& cpu, const Instruction& instr) {
 u32 BGEZALL(VR4300& cpu, const Instruction& instr) {
     u64 address = cpu.pc() + (sign_extend16(instr.i_type.immediate) << 2);
     if (static_cast<s64>(cpu.gpr(instr.i_type.rs)) >= 0) {
-        cpu.set_gpr(31, cpu.pc() + 8);
+        cpu.set_gpr(31, cpu.pc() + 4);
         cpu.delay_branch(address);
     } else {
         cpu.set_pc(cpu.pc() + 4);
