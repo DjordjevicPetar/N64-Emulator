@@ -2,6 +2,11 @@
 
 namespace n64::cpu {
 
+static constexpr int TRACE_SIZE = 16;
+static u64 trace_pc[TRACE_SIZE] = {};
+static u32 trace_instr[TRACE_SIZE] = {};
+static int trace_idx = 0;
+
 VR4300::VR4300(memory::MemoryMap& memory)
     : memory_(memory)
 {
@@ -38,6 +43,10 @@ u32 VR4300::execute_next_instruction()
     static bool nop_slide_logged = false;
     static u64 last_real_pc = 0;
     static u32 last_real_instr = 0;
+
+    trace_pc[trace_idx % TRACE_SIZE] = pc_ - 4;
+    trace_instr[trace_idx % TRACE_SIZE] = current_instruction_.raw;
+    trace_idx++;
     if (current_instruction_.raw == 0x00000000) {
         consecutive_nops++;
         if (consecutive_nops == 16 && !nop_slide_logged) {
@@ -121,6 +130,44 @@ u32 VR4300::execute_next_instruction()
 bool VR4300::check_address_exception(u64 address, u8 word_size, bool is_load)
 {
     if ((address & (word_size - 1)) == 0) return false;
+
+    static u32 adel_diag_count = 0;
+    if (adel_diag_count++ < 3) {
+        u32 instr_raw = current_instruction_.raw;
+        u8 rs = current_instruction_.i_type.rs;
+        u8 rt = current_instruction_.i_type.rt;
+        s16 imm = static_cast<s16>(current_instruction_.i_type.immediate);
+        fprintf(stderr, "\n=== ADDRESS EXCEPTION DIAGNOSTIC ===\n"
+                "[ADEL-DIAG] PC=0x%08llX instr=0x%08X op=%u rs=r%u(0x%016llX) rt=r%u imm=%d\n"
+                "  computed_addr=0x%016llX word_size=%u %s\n"
+                "  $ra=0x%016llX $sp=0x%016llX $gp=0x%016llX $fp=0x%016llX\n"
+                "  $v0=0x%016llX $v1=0x%016llX $a0=0x%016llX $a1=0x%016llX\n"
+                "  $t0=0x%016llX $t1=0x%016llX $t2=0x%016llX $t3=0x%016llX\n"
+                "  $s0=0x%016llX $s1=0x%016llX $s2=0x%016llX $s3=0x%016llX\n",
+                (unsigned long long)(pc_ - 4), instr_raw,
+                (unsigned)current_instruction_.i_type.opcode,
+                (unsigned)rs, (unsigned long long)gpr_[rs],
+                (unsigned)rt, (int)imm,
+                (unsigned long long)address, (unsigned)word_size,
+                is_load ? "LOAD" : "STORE",
+                (unsigned long long)gpr_[31], (unsigned long long)gpr_[29],
+                (unsigned long long)gpr_[28], (unsigned long long)gpr_[30],
+                (unsigned long long)gpr_[2], (unsigned long long)gpr_[3],
+                (unsigned long long)gpr_[4], (unsigned long long)gpr_[5],
+                (unsigned long long)gpr_[8], (unsigned long long)gpr_[9],
+                (unsigned long long)gpr_[10], (unsigned long long)gpr_[11],
+                (unsigned long long)gpr_[16], (unsigned long long)gpr_[17],
+                (unsigned long long)gpr_[18], (unsigned long long)gpr_[19]);
+
+        fprintf(stderr, "  --- Last %d instructions before this ---\n", TRACE_SIZE);
+        for (int i = TRACE_SIZE; i > 0; i--) {
+            int idx = (trace_idx - i) % TRACE_SIZE;
+            if (idx < 0) idx += TRACE_SIZE;
+            fprintf(stderr, "  [-%02d] PC=0x%08llX instr=0x%08X\n",
+                    i, (unsigned long long)trace_pc[idx], trace_instr[idx]);
+        }
+        fprintf(stderr, "=== END DIAGNOSTIC ===\n\n");
+    }
 
     if (is_load) {
         cp0_.raise_address_exception(ExceptionCode::ADEL, address);
