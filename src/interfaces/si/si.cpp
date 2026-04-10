@@ -1,6 +1,7 @@
 #include "si.hpp"
 #include <stdexcept>
 #include <string>
+#include <cstdio>
 
 namespace n64::interfaces {
 
@@ -53,6 +54,7 @@ void SI::write_register(u32 address, u32 value) {
             dram_addr_.raw = value & 0x00FFFFFF;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD64B:
+            fprintf(stderr, "[SI] DMA Read (PIF->RDRAM) dram=0x%08X\n", dram_addr_.address);
             pif_ad_rd64b_.raw = value & 0x000007FC;
             pif_.dma_read_to_rdram(rdram_, dram_addr_.address);
             mi_.set_interrupt(MI_INTERRUPT_SI);
@@ -63,6 +65,7 @@ void SI::write_register(u32 address, u32 value) {
             pif_ad_wr4b_.raw = value;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR64B:
+            fprintf(stderr, "[SI] DMA Write (RDRAM->PIF) dram=0x%08X\n", dram_addr_.address);
             pif_ad_wr64b_.raw = value;
             pif_.dma_write_from_rdram(rdram_, dram_addr_.address);
             mi_.set_interrupt(MI_INTERRUPT_SI);

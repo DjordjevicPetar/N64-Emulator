@@ -1,6 +1,7 @@
 #include "mi.hpp"
 #include <stdexcept>
 #include <string>
+#include <cstdio>
 
 namespace n64::interfaces {
 
@@ -51,6 +52,9 @@ void MI::write_register(u32 address, u32 value) {
             clear_set_resolver(mask_, get_bit(value, 6),  get_bit(value, 7),  MI_INTERRUPT_VI);
             clear_set_resolver(mask_, get_bit(value, 8),  get_bit(value, 9),  MI_INTERRUPT_PI);
             clear_set_resolver(mask_, get_bit(value, 10), get_bit(value, 11), MI_INTERRUPT_DP);
+            fprintf(stderr, "[MI] MASK = 0x%02X (SP=%u SI=%u AI=%u VI=%u PI=%u DP=%u)\n",
+                    mask_, (mask_>>0)&1, (mask_>>1)&1, (mask_>>2)&1,
+                    (mask_>>3)&1, (mask_>>4)&1, (mask_>>5)&1);
             break;
         }
         default:

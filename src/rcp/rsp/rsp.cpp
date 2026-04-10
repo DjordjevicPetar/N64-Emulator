@@ -3,6 +3,7 @@
 #include "../../memory/memory_constants.hpp"
 #include <stdexcept>
 #include <string>
+#include <cstdio>
 
 // TODO: RSP needs work on cycle accuracy:
 // TODO: Verify exact CPU-to-RSP cycle ratio (2/3) - current float accumulation may drift
@@ -154,6 +155,7 @@ void RSP::write_register(u32 address, u32 value) {
             return;
         }
         case RSP_REGISTERS_ADDRESS::RSP_STATUS: {
+            bool was_halted = status_.halt;
             // clr/set pairs - if both set, no change
             clear_set_resolver(status_.raw, get_bit(value, 0),  get_bit(value, 1),  0);  // halt
             if (get_bit(value, 2)) status_.broke = 0;  // clear broke (no set pair)
@@ -169,6 +171,8 @@ void RSP::write_register(u32 address, u32 value) {
             clear_set_resolver(status_.raw, get_bit(value, 19), get_bit(value, 20), 12); // signal5
             clear_set_resolver(status_.raw, get_bit(value, 21), get_bit(value, 22), 13); // signal6
             clear_set_resolver(status_.raw, get_bit(value, 23), get_bit(value, 24), 14); // signal7
+            if (was_halted && !status_.halt)
+                fprintf(stderr, "[RSP] Started (halt cleared), PC=0x%03X\n", pc_);
             return;
         }
         case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:
