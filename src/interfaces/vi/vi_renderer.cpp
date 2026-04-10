@@ -43,7 +43,6 @@ void VIRenderer::render_frame() {
     u32 width = vi_->width().width;
     u32 type = vi_->ctrl().type;
 
-    // TODO: Handle blank screen for test_mode and kill_we flags
     if (type == 0 || width == 0) {
         // Blank screen
         SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);

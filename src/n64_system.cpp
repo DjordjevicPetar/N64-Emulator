@@ -112,10 +112,14 @@ void N64System::poll_input()
 void N64System::run()
 {
     u64 event_check_counter = 0;
+    u64 total_instructions = 0;
     constexpr u64 EVENT_CHECK_INTERVAL = 10000;
 
     while (true) {
         u32 cycles = cpu_.execute_next_instruction();
+        total_instructions++;
+        if (total_instructions % 5000000 == 0)
+            printf("[DBG] %lluM instr, PC=0x%08llX\n", total_instructions / 1000000, cpu_.pc());
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
         pi_.process_passed_cycles(cycles);
