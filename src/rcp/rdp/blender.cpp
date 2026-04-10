@@ -1,4 +1,5 @@
 #include "blender.hpp"
+#include <algorithm>
 
 namespace n64::rdp {
 

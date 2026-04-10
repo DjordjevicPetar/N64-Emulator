@@ -33,16 +33,25 @@ N64System::N64System(const std::string& rom_path)
     u32 pc_address = boot();
     cpu_.set_pc(pc_address);
 
-    // TODO: Replace hardcoded boot stub with actual PIF ROM execution (IPL1/IPL2/IPL3)
-    // Simulate what PIF boot code sets up after IPL3 runs:
-    // CP0 registers as they appear after PIF boot completes
+    // Simulate what IPL3 boot code sets up before jumping to game code
+    // CP0 registers
     cpu_.cp0().set_reg(4,  0x007FFFF0);             // Context
-    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF);     // BadVAddr = 0xFFFFFFFF
-    cpu_.cp0().set_reg(12, 0x241000E0);             // Status: CU1=1, FR=1, SR=1, KX=1, SX=1, UX=1
-    cpu_.cp0().set_reg(13, 0x00000000);             // Cause = 0
-    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF);     // EPC = 0xFFFFFFFF
+    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF);     // BadVAddr
+    cpu_.cp0().set_reg(12, 0x241000E0);             // Status: CU1=1, FR=1, KX=1, SX=1, UX=1
+    cpu_.cp0().set_reg(13, 0x00000000);             // Cause
+    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF);     // EPC
     cpu_.cp0().set_reg(16, 0x0006E463);             // Config
-    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF);     // ErrorEPC = 0xFFFFFFFF
+    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF);     // ErrorEPC
+
+    // GPR registers as left by IPL3
+    u8 seed = rom_.cic_seed();
+    cpu_.set_gpr(20, 0x00000001);                   // s4 = TV type (1 = NTSC)
+    cpu_.set_gpr(22, seed);                         // s6 = CIC seed
+    cpu_.set_gpr(29, 0xFFFFFFFFA4001FF0ULL);        // sp = end of RSP DMEM
+
+    // Write CIC seed to PIF RAM so game can verify it
+    pif_.write(memory::PIF_START_ADDRESS + 0x24, static_cast<u8>(seed));
+    pif_.write(memory::PIF_START_ADDRESS + 0x25, static_cast<u8>(seed));
 }
 
 u32 N64System::boot()

@@ -88,13 +88,37 @@ void PIF::process_commands()
 {
     u8 cmd_byte = memory_[63];
 
-    // Nothing important for emulation, just clear the bit
-    if (cmd_byte & 0xFE) {
-        memory_[63] &= ~0xFE;
+    if (cmd_byte & 0x02) {
+        // CIC challenge - respond with dummy values to keep the game happy
+        // Games check this periodically and reset if it fails
+        // A proper implementation would compute the CIC challenge-response,
+        // but zeroing the challenge area is enough for most games
+        for (int i = 48; i < 63; i++)
+            memory_[i] = 0;
+        memory_[63] &= ~0x02;
+    }
+
+    if (cmd_byte & 0x08) {
+        // Terminate PIF boot (clear ROM lockout)
+        memory_[63] &= ~0x08;
+    }
+
+    if (cmd_byte & 0x10) {
+        // Clear PIF RAM
+        for (int i = 0; i < 64; i++)
+            memory_[i] = 0;
+        return;
+    }
+
+    if (cmd_byte & 0x20) {
+        memory_[63] &= ~0x20;
+    }
+
+    if (cmd_byte & 0x40) {
+        memory_[63] &= ~0x40;
     }
 
     if ((cmd_byte & 0x01) == 0) return;
-
 
     for (int channel = 0, pos = 0; channel < 5; channel++) {
         if (!parse_channel(pos, channel)) break;

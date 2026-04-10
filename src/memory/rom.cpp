@@ -15,6 +15,7 @@ ROM::ROM(interfaces::PI& pi, const std::string& path) : path_(path), pi_(pi) {
     memory_.resize(size);
     file.read(reinterpret_cast<char*>(memory_.data()), size);
     convert_to_big_endian();
+    detect_cic();
 
     file.close();
 }
@@ -99,6 +100,48 @@ u32 ROM::parse_header() {
     rom_version_ = memory_[0x0000003F];
 
     return pc_address;
+}
+
+u32 ROM::crc32(const u8* data, size_t len) {
+    u32 crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j < 8; j++)
+            crc = (crc >> 1) ^ (0xEDB88320 & (-(crc & 1)));
+    }
+    return ~crc;
+}
+
+void ROM::detect_cic() {
+    if (memory_.size() < 0x1000) {
+        cic_type_ = CIC_TYPE::CIC_UNKNOWN;
+        return;
+    }
+
+    u32 bootcode_crc = crc32(&memory_[0x40], 0x1000 - 0x40);
+
+    switch (bootcode_crc) {
+        case 0x6170A4A1: cic_type_ = CIC_TYPE::CIC_6101; break;
+        case 0x90BB6CB5: cic_type_ = CIC_TYPE::CIC_6102; break;
+        case 0x0B050EE0: cic_type_ = CIC_TYPE::CIC_6103; break;
+        case 0x98BC2C86: cic_type_ = CIC_TYPE::CIC_6105; break;
+        case 0xACC8580A: cic_type_ = CIC_TYPE::CIC_6106; break;
+        case 0x009E9EA3: cic_type_ = CIC_TYPE::CIC_6102; break; // 7102
+        default:
+            cic_type_ = CIC_TYPE::CIC_6102; // Default fallback
+            break;
+    }
+}
+
+u8 ROM::cic_seed() const {
+    switch (cic_type_) {
+        case CIC_TYPE::CIC_6101: return 0x3F;
+        case CIC_TYPE::CIC_6102: return 0x3F;
+        case CIC_TYPE::CIC_6103: return 0x78;
+        case CIC_TYPE::CIC_6105: return 0x91;
+        case CIC_TYPE::CIC_6106: return 0x85;
+        default:                 return 0x3F;
+    }
 }
 
 } // namespace n64::memory
