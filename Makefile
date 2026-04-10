@@ -18,7 +18,7 @@ endif
 # Find all .cpp files in src/ and subdirectories
 SOURCES := $(shell find src -name '*.cpp')
 CXX := g++
-CXXFLAGS := -std=c++20 -O3 -Wall -I./src $(shell pkg-config --cflags sdl3)
+CXXFLAGS := -std=c++20 -O3 -w -I./src $(shell pkg-config --cflags sdl3)
 LDFLAGS := $(shell pkg-config --libs sdl3)
 
 .PHONY: clean build debug run

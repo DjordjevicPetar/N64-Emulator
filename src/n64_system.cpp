@@ -35,23 +35,43 @@ N64System::N64System(const std::string& rom_path)
     cpu_.set_pc(pc_address);
     fprintf(stderr, "[BOOT] Entry point: 0x%08X\n", pc_address);
 
-    // CP0 registers
-    cpu_.cp0().set_reg(4,  0x007FFFF0);
-    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF);
-    cpu_.cp0().set_reg(12, 0x241000E0);
-    cpu_.cp0().set_reg(13, 0x00000000);
-    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF);
-    cpu_.cp0().set_reg(16, 0x0006E463);
-    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF);
+    // CP0 registers as set by IPL3
+    cpu_.cp0().set_reg(1,  31);           // Random
+    cpu_.cp0().set_reg(4,  0x007FFFF0);   // Context
+    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF); // BadVAddr
+    cpu_.cp0().set_reg(12, 0x34000000);   // Status: FR=1, CU1=1
+    cpu_.cp0().set_reg(13, 0x00000000);   // Cause
+    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF); // EPC
+    cpu_.cp0().set_reg(15, 0x00000B00);   // PRId: VR4300
+    cpu_.cp0().set_reg(16, 0x0006E463);   // Config
+    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF); // ErrorEPC
 
-    // GPR registers
+    // GPR registers as set by IPL3
     u8 seed = rom_.cic_seed();
-    cpu_.set_gpr(20, 0x00000001);
-    cpu_.set_gpr(22, seed);
-    cpu_.set_gpr(29, 0xFFFFFFFFA4001FF0ULL);
+    cpu_.set_gpr(11, 0xFFFFFFFFA4000040ULL); // t3
+    cpu_.set_gpr(20, 0x00000001);            // s4 = TV type (NTSC)
+    cpu_.set_gpr(22, seed);                  // s6 = CIC seed
+    cpu_.set_gpr(29, 0xFFFFFFFFA4001FF0ULL); // sp
 
+    // CIC seed in PIF RAM
     pif_.write(memory::PIF_START_ADDRESS + 0x24, static_cast<u8>(seed));
     pif_.write(memory::PIF_START_ADDRESS + 0x25, static_cast<u8>(seed));
+
+    // libultra OS variables in RDRAM (written by IPL3)
+    rdram_.write_memory<u32>(0x00000300, 0x00000001); // osTvType = NTSC
+    rdram_.write_memory<u32>(0x00000304, 0x00000000); // osRomType = cartridge
+    rdram_.write_memory<u32>(0x00000308, 0xB0000000); // osRomBase
+    rdram_.write_memory<u32>(0x0000030C, 0x00000000); // osResetType = cold boot
+    rdram_.write_memory<u32>(0x00000310, seed);        // osCicId
+    rdram_.write_memory<u32>(0x00000314, 0x00000000); // osVersion
+    rdram_.write_memory<u32>(0x00000318, memory::RDRAM_MEMORY_SIZE); // osMemSize = 8MB
+
+    // RI registers (set by IPL3 during RDRAM initialization)
+    ri_.write_register(0x04700000, 0x0E); // RI_MODE
+    ri_.write_register(0x04700004, 0x40); // RI_CONFIG
+    ri_.write_register(0x04700008, 0x00); // RI_CURRENT_LOAD
+    ri_.write_register(0x0470000C, 0x14); // RI_SELECT
+    ri_.write_register(0x04700010, 0x00063634); // RI_REFRESH
 
     fprintf(stderr, "[BOOT] Boot complete, starting execution\n");
 }
@@ -61,12 +81,14 @@ u32 N64System::boot()
     u32 entry_point = rom_.parse_header();
     
     constexpr u32 ROM_CODE_OFFSET = 0x1000;
+    constexpr size_t IPL3_COPY_SIZE = 0x100000; // IPL3 copies exactly 1MB
     u32 rdram_dest = entry_point & 0x1FFFFFFF;
     
-    size_t copy_size = std::min(
+    size_t copy_size = std::min({
+        IPL3_COPY_SIZE,
         rom_.size() - ROM_CODE_OFFSET, 
         static_cast<size_t>(memory::RDRAM_MEMORY_SIZE - rdram_dest)
-    );
+    });
     
     fprintf(stderr, "[BOOT] Copying %zu bytes from ROM:0x%X to RDRAM:0x%X\n", 
             copy_size, ROM_CODE_OFFSET, rdram_dest);
