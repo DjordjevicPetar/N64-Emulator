@@ -1,6 +1,7 @@
 #include "cp0.hpp"
 #include "vr4300.hpp"
 #include <stdexcept>
+#include <cstdio>
 
 namespace n64::cpu {
 
@@ -242,6 +243,26 @@ void CP0::handle_count_register(u32 cycles) {
 }
 
 void CP0::raise_exception(ExceptionCode code, u8 ce) {
+    static u64 exc_count = 0;
+    exc_count++;
+    if (exc_count <= 20 || (code != ExceptionCode::INT && code != ExceptionCode::TLBL 
+        && code != ExceptionCode::TLBS)) {
+        fprintf(stderr, "[EXC] #%llu code=%u(%s) PC=0x%08llX EPC=0x%08llX\n",
+                (unsigned long long)exc_count, (unsigned)code,
+                code == ExceptionCode::INT ? "INT" :
+                code == ExceptionCode::TLBL ? "TLBL" :
+                code == ExceptionCode::TLBS ? "TLBS" :
+                code == ExceptionCode::MOD ? "MOD" :
+                code == ExceptionCode::ADEL ? "ADEL" :
+                code == ExceptionCode::ADES ? "ADES" :
+                code == ExceptionCode::RI ? "RI" :
+                code == ExceptionCode::CPU ? "CPU" :
+                code == ExceptionCode::OV ? "OV" :
+                code == ExceptionCode::FPE ? "FPE" : "???",
+                (unsigned long long)cpu_.pc(),
+                (unsigned long long)(cpu_.pc() - 4));
+    }
+
     cause_.exc_code = static_cast<u32>(code);
 
     if (code == ExceptionCode::CPU) {
