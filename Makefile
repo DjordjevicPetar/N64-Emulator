@@ -1,8 +1,14 @@
-# Detect OS
+# Detect OS (MSYSTEM is set in MSYS2, treat it as Unix-like)
 ifeq ($(OS),Windows_NT)
+  ifndef MSYSTEM
     TARGET := n64.exe
     RM := cmd /C del /Q
     RUN_PREFIX :=
+  else
+    TARGET := n64.exe
+    RM := rm -f
+    RUN_PREFIX := ./
+  endif
 else
     TARGET := n64
     RM := rm -f
