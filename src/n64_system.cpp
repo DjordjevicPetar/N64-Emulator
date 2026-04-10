@@ -1,5 +1,6 @@
 #include "n64_system.hpp"
 #include <algorithm>
+#include <cstdio>
 #include <SDL3/SDL.h>
 
 namespace n64 {
@@ -19,58 +20,57 @@ N64System::N64System(const std::string& rom_path)
     , memory_map_(rdram_, rom_, mi_, rdp_, rsp_, ai_, vi_, si_, ri_, pi_, pif_)
     , cpu_(memory_map_)
 {
-    // Connect PI to ROM and RDRAM for DMA transfers
     pi_.set_dma_targets(rom_, rdram_);
 
-    // EEPROM save path: replace ROM extension with .eep
     std::string save_path = rom_path;
     auto dot = save_path.rfind('.');
     if (dot != std::string::npos)
         save_path = save_path.substr(0, dot);
     pif_.set_save_path(save_path + ".eep");
     
-    // Boot the system
+    fprintf(stderr, "[BOOT] ROM loaded: %zu bytes\n", rom_.size());
+    fprintf(stderr, "[BOOT] CIC seed: 0x%02X\n", rom_.cic_seed());
+
     u32 pc_address = boot();
     cpu_.set_pc(pc_address);
+    fprintf(stderr, "[BOOT] Entry point: 0x%08X\n", pc_address);
 
-    // Simulate what IPL3 boot code sets up before jumping to game code
     // CP0 registers
-    cpu_.cp0().set_reg(4,  0x007FFFF0);             // Context
-    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF);     // BadVAddr
-    cpu_.cp0().set_reg(12, 0x241000E0);             // Status: CU1=1, FR=1, KX=1, SX=1, UX=1
-    cpu_.cp0().set_reg(13, 0x00000000);             // Cause
-    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF);     // EPC
-    cpu_.cp0().set_reg(16, 0x0006E463);             // Config
-    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF);     // ErrorEPC
+    cpu_.cp0().set_reg(4,  0x007FFFF0);
+    cpu_.cp0().set_reg(8,  0xFFFFFFFFFFFFFFFF);
+    cpu_.cp0().set_reg(12, 0x241000E0);
+    cpu_.cp0().set_reg(13, 0x00000000);
+    cpu_.cp0().set_reg(14, 0xFFFFFFFFFFFFFFFF);
+    cpu_.cp0().set_reg(16, 0x0006E463);
+    cpu_.cp0().set_reg(30, 0xFFFFFFFFFFFFFFFF);
 
-    // GPR registers as left by IPL3
+    // GPR registers
     u8 seed = rom_.cic_seed();
-    cpu_.set_gpr(20, 0x00000001);                   // s4 = TV type (1 = NTSC)
-    cpu_.set_gpr(22, seed);                         // s6 = CIC seed
-    cpu_.set_gpr(29, 0xFFFFFFFFA4001FF0ULL);        // sp = end of RSP DMEM
+    cpu_.set_gpr(20, 0x00000001);
+    cpu_.set_gpr(22, seed);
+    cpu_.set_gpr(29, 0xFFFFFFFFA4001FF0ULL);
 
-    // Write CIC seed to PIF RAM so game can verify it
     pif_.write(memory::PIF_START_ADDRESS + 0x24, static_cast<u8>(seed));
     pif_.write(memory::PIF_START_ADDRESS + 0x25, static_cast<u8>(seed));
+
+    fprintf(stderr, "[BOOT] Boot complete, starting execution\n");
 }
 
 u32 N64System::boot()
 {
     u32 entry_point = rom_.parse_header();
     
-    // Simulate what IPL3 bootcode does:
-    // Copy game code from ROM to RDRAM
-    // ROM offset 0x1000 (after header + bootcode) -> RDRAM at entry point
+    constexpr u32 ROM_CODE_OFFSET = 0x1000;
+    u32 rdram_dest = entry_point & 0x1FFFFFFF;
     
-    constexpr u32 ROM_CODE_OFFSET = 0x1000;  // After header (0x40) and bootcode (0xFC0)
-    u32 rdram_dest = entry_point & 0x1FFFFFFF;  // Convert KSEG0/1 to physical
-    
-    // Calculate how much to copy (ROM size minus header, limited to RDRAM size)
     size_t copy_size = std::min(
         rom_.size() - ROM_CODE_OFFSET, 
         static_cast<size_t>(memory::RDRAM_MEMORY_SIZE - rdram_dest)
     );
     
+    fprintf(stderr, "[BOOT] Copying %zu bytes from ROM:0x%X to RDRAM:0x%X\n", 
+            copy_size, ROM_CODE_OFFSET, rdram_dest);
+
     for (size_t i = 0; i < copy_size; ++i) {
         rdram_.write_memory<u8>(
             rdram_dest + i, 
@@ -118,8 +118,23 @@ void N64System::run()
     while (true) {
         u32 cycles = cpu_.execute_next_instruction();
         total_instructions++;
-        if (total_instructions % 5000000 == 0)
-            printf("[DBG] %lluM instr, PC=0x%08llX\n", total_instructions / 1000000, cpu_.pc());
+
+        if (total_instructions <= 100) {
+            fprintf(stderr, "[CPU] #%llu PC=0x%08llX instr=0x%08X\n",
+                    (unsigned long long)total_instructions,
+                    (unsigned long long)cpu_.pc(),
+                    rdram_.read_memory<u32>((cpu_.pc() - 4) & 0x1FFFFFFF));
+        } else if (total_instructions == 1000) {
+            fprintf(stderr, "[CPU] ... (1K instructions reached, PC=0x%08llX)\n", (unsigned long long)cpu_.pc());
+        } else if (total_instructions % 1000000 == 0) {
+            fprintf(stderr, "[CPU] %lluM instr, PC=0x%08llX, VI: origin=0x%X width=%u type=%u\n",
+                    (unsigned long long)(total_instructions / 1000000),
+                    (unsigned long long)cpu_.pc(),
+                    vi_.origin().origin,
+                    vi_.width().width,
+                    vi_.ctrl().type);
+        }
+
         rsp_.process_passed_cycles(cycles);
         vi_.process_passed_cycles(cycles);
         pi_.process_passed_cycles(cycles);
