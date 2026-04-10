@@ -274,12 +274,16 @@ void CP0::raise_exception(ExceptionCode code, u8 ce) {
         if (cpu_.in_delay_slot()) {
             cause_.bd = 1;
             epc_ = cpu_.pc() - 8;
-            cpu_.reset_delay_slot();
         } else {
             cause_.bd = 0;
             epc_ = cpu_.pc() - 4;
         }
     }
+
+    // Always reset delay slot and mark exception pending so the current
+    // instruction stops modifying state and the branch isn't taken.
+    cpu_.reset_delay_slot();
+    cpu_.set_exception_pending();
 
     status_.exl = 1;
     cpu_.set_pc(get_exception_vector_address(code, old_exl));

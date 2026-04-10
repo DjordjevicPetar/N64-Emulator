@@ -22,15 +22,15 @@ public:
 
     // Register access
     [[nodiscard]] u64 gpr(u8 index) const { return gpr_[index]; }
-    void set_gpr(u8 index, u64 value) { if (index != 0) gpr_[index] = value; }
+    void set_gpr(u8 index, u64 value) { if (index != 0 && !exception_pending_) gpr_[index] = value; }
     
     [[nodiscard]] u64 pc() const { return pc_; }
     void set_pc(u64 value) { pc_ = value; }
     
     [[nodiscard]] u64 hi() const { return hi_; }
     [[nodiscard]] u64 lo() const { return lo_; }
-    void set_hi(u64 value) { hi_ = value; }
-    void set_lo(u64 value) { lo_ = value; }
+    void set_hi(u64 value) { if (!exception_pending_) hi_ = value; }
+    void set_lo(u64 value) { if (!exception_pending_) lo_ = value; }
 
     [[nodiscard]] bool get_LLbit() const { return ll_bit_; }
     void set_LLbit(bool value) { ll_bit_ = value; }
@@ -39,6 +39,9 @@ public:
 
     [[nodiscard]] bool in_delay_slot() const { return branch_pending_ || should_branch;}
     void reset_delay_slot() { should_branch = false; branch_pending_ = false; }
+
+    void set_exception_pending() { exception_pending_ = true; }
+    [[nodiscard]] bool exception_pending() const { return exception_pending_; }
 
     bool check_address_exception(u64 address, u8 word_size, bool is_load);
 
@@ -78,6 +81,11 @@ private:
 
     // ERET inhibits interrupts for 1 instruction (VR4300 hardware behavior)
     bool interrupt_inhibit_ = false;
+
+    // Set when an exception is raised during instruction execution (e.g., TLB miss
+    // inside translate_address). Prevents the instruction from continuing to modify
+    // registers/memory after the exception, and prevents branch/interrupt handling.
+    bool exception_pending_ = false;
 
     void read_next_instruction();
 };

@@ -26,7 +26,7 @@ u32 VR4300::translate_address(u64 virtual_address, bool is_write)
 
 u32 VR4300::execute_next_instruction()
 {
-
+    exception_pending_ = false;
     should_branch = branch_pending_;
     u32 cycles = 1;
     u64 target = branch_target_;
@@ -96,14 +96,23 @@ u32 VR4300::execute_next_instruction()
 
     cp0_.handle_random_register();
     cp0_.handle_count_register(cycles);
-    if (interrupt_inhibit_) {
+
+    if (exception_pending_) {
+        // An exception was raised during instruction execution (TLB miss,
+        // address error, etc.). Don't check interrupts or take branches -
+        // the PC is already set to the exception vector.
+        exception_pending_ = false;
         interrupt_inhibit_ = false;
+    } else if (interrupt_inhibit_) {
+        interrupt_inhibit_ = false;
+        if (should_branch) {
+            pc_ = target;
+        }
     } else {
         cp0_.check_interrupts();
-    }
-
-    if (should_branch) {
-        pc_ = target;
+        if (should_branch) {
+            pc_ = target;
+        }
     }
 
     return cycles;
@@ -124,14 +133,18 @@ bool VR4300::check_address_exception(u64 address, u8 word_size, bool is_load)
 template <typename T>
 T VR4300::read_memory(u64 address)
 {
+    if (exception_pending_) return T{0};
     u32 translated_address = translate_address(address, false);
+    if (exception_pending_) return T{0};
     return memory_.read<T>(translated_address);
 }
 
 template <typename T>
 void VR4300::write_memory(u64 address, T value)
 {
+    if (exception_pending_) return;
     u32 translated_address = translate_address(address, true);
+    if (exception_pending_) return;
     memory_.write<T>(translated_address, value);
 }
 
