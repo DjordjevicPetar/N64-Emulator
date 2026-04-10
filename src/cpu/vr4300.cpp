@@ -19,9 +19,9 @@ void VR4300::delay_branch(u64 target)
     branch_target_ = target;
 }
 
-u32 VR4300::translate_address(u64 virtual_address) const
+u32 VR4300::translate_address(u64 virtual_address, bool is_write)
 {
-    return cp0_.translate_address(virtual_address);
+    return cp0_.translate_address(virtual_address, is_write);
 }
 
 u32 VR4300::execute_next_instruction()
@@ -79,23 +79,23 @@ bool VR4300::check_address_exception(u64 address, u8 word_size, bool is_load)
 }
 
 template <typename T>
-T VR4300::read_memory(u64 address) const
+T VR4300::read_memory(u64 address)
 {
-    u32 translated_address = translate_address(address);
+    u32 translated_address = translate_address(address, false);
     return memory_.read<T>(translated_address);
 }
 
 template <typename T>
 void VR4300::write_memory(u64 address, T value)
 {
-    u32 translated_address = translate_address(address);
+    u32 translated_address = translate_address(address, true);
     memory_.write<T>(translated_address, value);
 }
 
-template u8 VR4300::read_memory<u8>(u64 address) const;
-template u16 VR4300::read_memory<u16>(u64 address) const;
-template u32 VR4300::read_memory<u32>(u64 address) const;
-template u64 VR4300::read_memory<u64>(u64 address) const;
+template u8 VR4300::read_memory<u8>(u64 address);
+template u16 VR4300::read_memory<u16>(u64 address);
+template u32 VR4300::read_memory<u32>(u64 address);
+template u64 VR4300::read_memory<u64>(u64 address);
 template void VR4300::write_memory<u8>(u64 address, u8 value);
 template void VR4300::write_memory<u16>(u64 address, u16 value);
 template void VR4300::write_memory<u32>(u64 address, u32 value);

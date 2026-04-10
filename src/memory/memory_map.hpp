@@ -10,7 +10,7 @@
 #include "../rcp/rdp/rdp.hpp"
 #include "../interfaces/ai/ai.hpp"
 #include "../interfaces/vi/vi.hpp"
-#include "../interfaces/si.hpp"
+#include "../interfaces/si/si.hpp"
 #include "../interfaces/ri.hpp"
 #include "../interfaces/pi/pi.hpp"
 #include "pif.hpp"

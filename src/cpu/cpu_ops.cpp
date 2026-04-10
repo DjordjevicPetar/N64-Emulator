@@ -344,7 +344,7 @@ u32 LL(VR4300& cpu, const Instruction& instr) {
     cpu.set_gpr(instr.i_type.rt, sign_extend32(value));
     cpu.set_LLbit(true);
     // LL_ADDR stores physical address >> 4 (cache line granularity)
-    u32 paddr = cpu.cp0().translate_address(address);
+    u32 paddr = cpu.cp0().translate_address(address, false);
     cpu.cp0().set_reg(CP0Reg::LL_ADDR, paddr >> 4);
     return 1;
 }
@@ -356,7 +356,7 @@ u32 LLD(VR4300& cpu, const Instruction& instr) {
     cpu.set_gpr(instr.i_type.rt, value);
     cpu.set_LLbit(true);
     // LL_ADDR stores physical address >> 4 (cache line granularity)
-    u32 paddr = cpu.cp0().translate_address(address);
+    u32 paddr = cpu.cp0().translate_address(address, false);
     cpu.cp0().set_reg(CP0Reg::LL_ADDR, paddr >> 4);
     return 1;
 }
@@ -1130,22 +1130,22 @@ u32 DMTC0(VR4300& cpu, const Instruction& instr) {
 
 // TLB instructions
 u32 TLBR(VR4300& cpu, const Instruction& instr) {
-    // TODO: Read TLB entry at Index into EntryHi, EntryLo0, EntryLo1, PageMask
+    cpu.cp0().read_tlb_entry(static_cast<u32>(cpu.cp0().get_reg(CP0Reg::INDEX)) & 0x1F);
     return 1;
 }
 
 u32 TLBWI(VR4300& cpu, const Instruction& instr) {
-    // TODO: Write EntryHi, EntryLo0, EntryLo1, PageMask into TLB entry at Index
+    cpu.cp0().write_tlb_entry(static_cast<u32>(cpu.cp0().get_reg(CP0Reg::INDEX)) & 0x1F);
     return 1;
 }
 
 u32 TLBWR(VR4300& cpu, const Instruction& instr) {
-    // TODO: Write EntryHi, EntryLo0, EntryLo1, PageMask into TLB entry at Random
+    cpu.cp0().write_tlb_entry(static_cast<u32>(cpu.cp0().get_reg(CP0Reg::RANDOM)) & 0x1F);
     return 1;
 }
 
 u32 TLBP(VR4300& cpu, const Instruction& instr) {
-    // TODO: Search TLB for entry matching EntryHi, set Index register (or set P bit if not found)
+    cpu.cp0().probe_tlb();
     return 1;
 }
 

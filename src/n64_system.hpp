@@ -13,7 +13,7 @@
 #include "interfaces/mi.hpp"
 #include "interfaces/ai/ai.hpp"
 #include "interfaces/vi/vi.hpp"
-#include "interfaces/si.hpp"
+#include "interfaces/si/si.hpp"
 #include "interfaces/ri.hpp"
 #include "interfaces/pi/pi.hpp"
 
@@ -39,6 +39,9 @@ public:
     
     // Boot the system - loads ROM code into RDRAM
     u32 boot();
+
+    // Poll SDL keyboard and update PIF controller state
+    void poll_input();
 
     // Component accessors (for debugging/testing)
     [[nodiscard]] cpu::VR4300& cpu() { return cpu_; }
@@ -69,10 +72,11 @@ private:
     // Other interfaces (need MI)
     interfaces::AI ai_;
     interfaces::VI vi_;
-    interfaces::SI si_;
     
     // PIF
     memory::PIF pif_;
+    
+    interfaces::SI si_;
     
     // Memory router (takes references to all components)
     memory::MemoryMap memory_map_;

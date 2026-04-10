@@ -2,5 +2,10 @@
 !README.md
 tests/*
 n64
+n64.exe
 n64_debug
-n64_debug.dSYM
+n64_asan
+*.dSYM/
+*.log
+*.eep
+tmp_*

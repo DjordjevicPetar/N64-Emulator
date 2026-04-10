@@ -1,28 +1,42 @@
 #include "pif.hpp"
+#include "rdram.hpp"
 #include "memory_constants.hpp"
 #include <stdexcept>
 #include <string>
+#include <fstream>
 
 namespace n64::memory {
 
-// TODO: PIF is almost entirely unimplemented. Major work needed:
-// TODO: Initialize PIF ROM boot code (0x1FC00000-0x1FC007BF) - contains IPL3 bootcode
-// TODO: Implement PIF ROM read handling for boot process
-// TODO: Implement Joybus protocol for controller communication
-// TODO: Implement CIC security chip communication and challenge/response
-// TODO: Implement PIF command parsing (0x00=info, 0x01=controller, 0x02=read mempack, etc.)
-// TODO: Handle controller pak, rumble pak, transfer pak peripherals
-// TODO: Implement EEPROM 4K/16K save support via PIF
-// TODO: Process commands when SI DMA writes to PIF RAM (byte 0x3F is command byte)
-
 PIF::PIF()
 {
-    // TODO: Initialize PIF ROM with actual boot code or stub
-    // TODO: Set initial PIF RAM state for boot
+    memory_.fill(0);
+    eeprom_data_.fill(0xFF);
 }
 
 PIF::~PIF()
 {
+    if (!save_path_.empty())
+        save_eeprom();
+}
+
+void PIF::set_save_path(const std::string& path)
+{
+    save_path_ = path;
+    load_eeprom();
+}
+
+void PIF::load_eeprom()
+{
+    std::ifstream file(save_path_, std::ios::binary);
+    if (file)
+        file.read(reinterpret_cast<char*>(eeprom_data_.data()), eeprom_data_.size());
+}
+
+void PIF::save_eeprom()
+{
+    std::ofstream file(save_path_, std::ios::binary);
+    if (file)
+        file.write(reinterpret_cast<const char*>(eeprom_data_.data()), eeprom_data_.size());
 }
 
 template<typename T>
@@ -51,6 +65,117 @@ void PIF::write(u32 address, T value)
     for (size_t i = 0; i < sizeof(T); ++i) {
         memory_[offset + i] = static_cast<u8>(value >> ((sizeof(T) - 1 - i) * 8));
     }
+}
+
+void PIF::dma_read_to_rdram(RDRAM& rdram, u32 dram_addr)
+{
+    memory_[63] |= 0x01;
+    process_commands();
+    for (int i = 0; i < 64; i++) {
+        rdram.write_memory<u8>(dram_addr + i, memory_[i]);
+    }
+}
+
+void PIF::dma_write_from_rdram(RDRAM& rdram, u32 dram_addr)
+{
+    for (int i = 0; i < 64; i++) {
+        memory_[i] = rdram.read_memory<u8>(dram_addr + i);
+    }
+    process_commands();
+}
+
+void PIF::process_commands()
+{
+    u8 cmd_byte = memory_[63];
+
+    // Nothing important for emulation, just clear the bit
+    if (cmd_byte & 0xFE) {
+        memory_[63] &= ~0xFE;
+    }
+
+    if ((cmd_byte & 0x01) == 0) return;
+
+
+    for (int channel = 0, pos = 0; channel < 5; channel++) {
+        if (!parse_channel(pos, channel)) break;
+    }
+
+    memory_[63] &= ~0x01;
+}
+
+bool PIF::parse_channel(int& pos, int channel)
+{
+    // Skip past any 0xFF nops
+    while (pos < 63 && memory_[pos] == 0xFF) pos++;
+    if (pos >= 63) return false;
+
+    u8 tx, rx;
+    u8 escape_code = memory_[pos++];
+
+    // Escape codes
+    switch (escape_code) {
+        case 0x00:
+            // Skip channel
+            return true;
+        case 0xFD:
+            // Reset channel
+            return true;
+        case 0xFE:
+            // End of frame
+            return false;
+    }
+
+    tx = escape_code & 0x3F;
+    rx = memory_[pos++] & 0x3F;
+
+    if (channel > 0 && channel < 4) {
+        memory_[pos - 1] = rx | 0x80;
+        pos += tx + rx;
+        return true;
+    }
+
+    u8 response_pos = pos + tx;
+    u8 cmd_byte = memory_[pos++];
+
+    switch (cmd_byte) {
+        case 0x00: case 0xFF:
+            if (channel == 0) {
+                memory_[response_pos++] = 0x05;
+                memory_[response_pos++] = 0x00;
+                memory_[response_pos++] = 0x02;
+            } else {
+                memory_[response_pos++] = 0x00;
+                memory_[response_pos++] = 0xC0;
+                memory_[response_pos++] = 0x00;
+            }
+            break;
+        case 0x01:
+            memory_[response_pos++] = (controller_.buttons >> 8) & 0xFF;
+            memory_[response_pos++] = controller_.buttons & 0xFF;
+            memory_[response_pos++] = static_cast<u8>(controller_.analog_x);
+            memory_[response_pos++] = static_cast<u8>(controller_.analog_y);
+            break;
+        case 0x04: {
+            u8 block = memory_[pos];
+            for (int i = 0; i < 8; i++)
+                memory_[response_pos++] = eeprom_data_[(block << 3) + i];
+            break;
+        }
+        case 0x05: {
+            u8 block = memory_[pos];
+            for (int i = 0; i < 8; i++)
+                eeprom_data_[(block << 3) + i] = memory_[pos + 1 + i];
+            memory_[response_pos++] = 0x00;
+            save_eeprom();
+            break;
+        }
+        default:
+            pos += tx + rx;
+            return true;
+    }
+
+    pos = response_pos;
+    return true;
 }
 
 // Explicit template instantiations

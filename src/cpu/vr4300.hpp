@@ -18,7 +18,7 @@ public:
 
     u32 execute_next_instruction();
     void delay_branch(u64 target);
-    [[nodiscard]] u32 translate_address(u64 virtual_address) const;
+    u32 translate_address(u64 virtual_address, bool is_write);
 
     // Register access
     [[nodiscard]] u64 gpr(u8 index) const { return gpr_[index]; }
@@ -50,7 +50,7 @@ public:
 
     // Memory access
     template <typename T>
-    [[nodiscard]] T read_memory(u64 address) const;
+    T read_memory(u64 address);
     template <typename T>
     void write_memory(u64 address, T value);
 

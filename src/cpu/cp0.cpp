@@ -43,7 +43,6 @@ void CP0::set_reg(u8 index, u64 value) {
         case 4:  context_.raw = value; break;
         case 5:  page_mask_.raw = static_cast<u32>(value) & 0x01FFE000; break;
         case 6:  
-            // TODO: Cold reset should reset wired to 0
             wired_.raw = static_cast<u32>(value) & 0x3F;
             random_.raw = 31;  // Reset random when wired is written
             break;
@@ -65,7 +64,6 @@ void CP0::set_reg(u8 index, u64 value) {
         case 14: epc_ = value; break;
         case 15: /* PRID is read-only */ break;
         case 16: 
-            // TODO: Cold reset should reset config to EP=0000 BE=1
             config_.raw = static_cast<u32>(value) & 0x0F00800F; break;
         case 17: ll_addr_ = static_cast<u32>(value); break;
         case 18: watch_lo_.raw = static_cast<u32>(value); break;
@@ -111,34 +109,113 @@ u64 CP0::get_reg(u8 index) const {
     }
 }
 
-u32 CP0::translate_address(u64 virtual_address) const {
+u32 CP0::translate_address(u64 virtual_address, bool is_write) {
     u32 segment = (virtual_address >> 29) & 0x7;
     
     switch (segment) {
         case 0: case 1: case 2: case 3:
-            // KUSEG - TLB mapped (user segment)
-            // TODO: Implement TLB lookup - required for games that use virtual memory
-            // Currently direct-mapped as workaround (works for test ROMs only)
-            return static_cast<u32>(virtual_address & 0x1FFFFFFF);
+            // KUSEG - TLB mapped
+            return tlb_lookup(virtual_address, is_write);
         case 4:
-            // KSEG0 - Direct mapped, cached (0x80000000 - 0x9FFFFFFF)
+            // KSEG0 - Direct mapped, cached
             return static_cast<u32>(virtual_address & 0x1FFFFFFF);
         case 5:
-            // KSEG1 - Direct mapped, uncached (0xA0000000 - 0xBFFFFFFF)
+            // KSEG1 - Direct mapped, uncached
             return static_cast<u32>(virtual_address & 0x1FFFFFFF);
         case 6:
-            // KSSEG - TLB mapped (supervisor segment)
-            throw std::runtime_error("KSSEG address space not supported (TLB required)");
+            // KSSEG - TLB mapped
+            return tlb_lookup(virtual_address, is_write);
         case 7:
-            // KSEG3 - TLB mapped (kernel segment)
-            throw std::runtime_error("KSEG3 address space not supported (TLB required)");
+            // KSEG3 - TLB mapped
+            return tlb_lookup(virtual_address, is_write);
         default:
             throw std::runtime_error("Invalid address segment");
     }
 }
 
+u32 CP0::tlb_lookup(u64 virtual_address, bool is_write) {
+    for (u32 i = 0; i < 32; i++) {
+        // Each TLB entry can have a different page size via its own PageMask
+        u32 page_mask_full = tlb_[i].page_mask.raw | 0x1FFF;
+        u64 vpn2_mask = ~((u64)page_mask_full >> 13) & 0x7FFFFFF;
+
+        u64 addr_vpn2 = (virtual_address >> 13) & 0x7FFFFFF;
+        bool vpn2_match = (tlb_[i].entry_hi.vpn2 & vpn2_mask) == (addr_vpn2 & vpn2_mask);
+        bool asid_match = tlb_[i].global || (tlb_[i].entry_hi.asid == entry_hi_.asid);
+
+        if (!vpn2_match || !asid_match) continue;
+
+        // Matched - select even or odd page
+        u32 odd_bit = page_mask_full + 1;
+        bool is_odd = (virtual_address & odd_bit) != 0;
+        const auto& entry_lo = is_odd ? tlb_[i].entry_lo1 : tlb_[i].entry_lo0;
+
+        if (!entry_lo.valid) {
+            raise_tlb_exception(is_write ? ExceptionCode::TLBS : ExceptionCode::TLBL, virtual_address);
+            return 0;
+        }
+
+        if (is_write && !entry_lo.dirty) {
+            raise_tlb_exception(ExceptionCode::MOD, virtual_address);
+            return 0;
+        }
+
+        // Physical address = PFN (shifted) | offset within page
+        u32 offset_mask = page_mask_full;
+        return (static_cast<u32>(entry_lo.pfn) << 12) | (static_cast<u32>(virtual_address) & offset_mask);
+    }
+
+    // No TLB entry matched - TLB miss
+    raise_tlb_exception(is_write ? ExceptionCode::TLBS : ExceptionCode::TLBL, virtual_address);
+    return 0;
+}
+
+void CP0::raise_tlb_exception(ExceptionCode code, u64 virtual_address) {
+    bad_vaddr_ = virtual_address;
+    context_.bad_vpn2 = (virtual_address >> 13) & 0x7FFFF;
+    xcontext_.bad_vpn2 = (virtual_address >> 13) & 0x7FFFFFF;
+    xcontext_.r = (virtual_address >> 62) & 0x3;
+    entry_hi_.vpn2 = (virtual_address >> 13) & 0x7FFFFFF;
+    entry_hi_.region = (virtual_address >> 62) & 0x3;
+    raise_exception(code);
+}
+
+void CP0::write_tlb_entry(u32 index) {
+    index &= 0x1F;
+    tlb_[index] = {
+        .entry_hi = entry_hi_,
+        .entry_lo0 = entry_lo0_,
+        .entry_lo1 = entry_lo1_,
+        .page_mask = page_mask_,
+        .global = static_cast<bool>(entry_lo0_.global & entry_lo1_.global)
+    };
+}
+
+void CP0::read_tlb_entry(u32 index) {
+    index &= 0x1F;
+    page_mask_.raw = tlb_[index].page_mask.raw;
+    entry_hi_.raw = tlb_[index].entry_hi.raw;
+    entry_lo0_.raw = tlb_[index].entry_lo0.raw;
+    entry_lo1_.raw = tlb_[index].entry_lo1.raw;
+    entry_lo0_.global = tlb_[index].global;
+    entry_lo1_.global = tlb_[index].global;
+}
+
+void CP0::probe_tlb() {
+    index_.probe = 1;
+    for (u32 i = 0; i < 32; i++) {
+        bool vpn2_match = (tlb_[i].entry_hi.vpn2 == entry_hi_.vpn2);
+        bool asid_match = tlb_[i].global || (tlb_[i].entry_hi.asid == entry_hi_.asid);
+
+        if (vpn2_match && asid_match) {
+            index_.index = i;
+            index_.probe = 0;
+            return;
+        }
+    }
+}
+
 void CP0::handle_random_register() {
-    // TODO: Cold reset should reset random to 31
     if ((random_.random & 0x1F) == (wired_.wired & 0x1F)) {
         random_.random = 31;
     } else {
@@ -165,33 +242,27 @@ void CP0::handle_count_register(u32 cycles) {
 }
 
 void CP0::raise_exception(ExceptionCode code, u8 ce) {
-    // Set exception code in Cause register
     cause_.exc_code = static_cast<u32>(code);
 
     if (code == ExceptionCode::CPU) {
         cause_.ce = ce;
     }
 
+    bool old_exl = status_.exl;
+
     if (!status_.exl) {
-        // EPC = address of the instruction that caused the exception
-        // PC is already incremented by 4 after fetch, so subtract 4
-        // If in delay slot, EPC = branch instruction (subtract 8) and set BD
         if (cpu_.in_delay_slot()) {
             cause_.bd = 1;
-            epc_ = cpu_.pc() - 8;  // PC of the branch instruction
+            epc_ = cpu_.pc() - 8;
             cpu_.reset_delay_slot();
         } else {
             cause_.bd = 0;
-            epc_ = cpu_.pc() - 4;  // PC of the faulting instruction
+            epc_ = cpu_.pc() - 4;
         }
     }
-    // If EXL is already set (nested exception), don't overwrite EPC/BD
 
-    // Enter exception mode
     status_.exl = 1;
-
-    // Jump to exception vector
-    cpu_.set_pc(get_exception_vector_address(code));
+    cpu_.set_pc(get_exception_vector_address(code, old_exl));
 }
 
 void CP0::raise_address_exception(ExceptionCode code, u64 address) {
@@ -200,39 +271,39 @@ void CP0::raise_address_exception(ExceptionCode code, u64 address) {
     raise_exception(code);
 }
 
-
 void CP0::check_interrupts() {
-    // Interrupts are only taken when:
-    // IE=1 (interrupts enabled), EXL=0 (not in exception), ERL=0 (not in error)
     if (!status_.ie || status_.exl || status_.erl) return;
 
-    // Check if any pending interrupt is enabled in the mask
-    // ip = bits 8-15 of Cause, im = bits 8-15 of Status
     u8 pending = cause_.ip | (cause_.timer_int << 7);
     if (pending & status_.im) {
         raise_exception(ExceptionCode::INT);
     }
 }
 
-u64 CP0::get_exception_vector_address(ExceptionCode code) const {
-    // Base address depends on BEV bit in Status register
-    // BEV=0: base = 0x80000000, BEV=1: base = 0xBFC00200
+u64 CP0::get_exception_vector_address(ExceptionCode code, bool old_exl) const {
     u64 base;
     bool bev = (status_.ds >> 6) & 1;  // BEV is bit 22 of Status = bit 6 of ds field
 
     if (bev) {
-        base = EXCEPTION_VECTOR_ADDRESS_32_BEV;  // 0xBFC00200
+        base = EXCEPTION_VECTOR_ADDRESS_32_BEV;
     } else {
-        base = EXCEPTION_VECTOR_ADDRESS_32_NO_BEV;  // 0x80000000
+        base = EXCEPTION_VECTOR_ADDRESS_32_NO_BEV;
     }
 
-    // Offset depends on exception type
     u32 offset;
-    if (code == ExceptionCode::TLBL || code == ExceptionCode::TLBS) {
-        // TLB Refill gets its own vector (only when EXL=0, handled above)
-        offset = 0x000;
+    if (!old_exl && (code == ExceptionCode::TLBL || code == ExceptionCode::TLBS)) {
+        // Determine if 64-bit addressing mode is active for the faulting segment
+        u32 segment = (bad_vaddr_ >> 29) & 0x7;
+        bool use_xtlb;
+        if (segment < 4) {
+            use_xtlb = status_.ux;
+        } else if (segment == 6) {
+            use_xtlb = status_.sx;
+        } else {
+            use_xtlb = status_.kx;
+        }
+        offset = use_xtlb ? 0x080 : 0x000;
     } else {
-        // General exception vector
         offset = 0x180;
     }
 

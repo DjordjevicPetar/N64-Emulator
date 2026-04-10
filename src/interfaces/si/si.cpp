@@ -4,14 +4,16 @@
 
 namespace n64::interfaces {
 
-SI::SI(MI& mi)
+SI::SI(MI& mi, memory::RDRAM& rdram, memory::PIF& pif)
     : mi_(mi)
-    , dram_addr_(0)
-    , pif_ad_rd64b_(0)
-    , pif_ad_wr4b_(0)
-    , pif_ad_wr64b_(0)
-    , pif_ad_rd4b_(0)
-    , status_(0)
+    , rdram_(rdram)
+    , pif_(pif)
+    , dram_addr_{.raw = 0}
+    , pif_ad_rd64b_{.raw = 0}
+    , pif_ad_wr4b_{.raw = 0}
+    , pif_ad_wr64b_{.raw = 0}
+    , pif_ad_rd4b_{.raw = 0}
+    , status_{.raw = 0}
 {
 }
 SI::~SI() {}
@@ -29,46 +31,46 @@ void SI::write(u32 address, T value) {
 u32 SI::read_register(u32 address) const {
     switch (address) {
         case SI_REGISTERS_ADDRESS::SI_DRAM_ADDR:
-            return dram_addr_;
+            return dram_addr_.raw;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD64B:
-            return pif_ad_rd64b_;
+            return pif_ad_rd64b_.raw;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR4B:
-            return pif_ad_wr4b_;
+            return pif_ad_wr4b_.raw;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR64B:
-            return pif_ad_wr64b_;
+            return pif_ad_wr64b_.raw;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD4B:
-            return pif_ad_rd4b_;
+            return pif_ad_rd4b_.raw;
         case SI_REGISTERS_ADDRESS::SI_STATUS:
-            return status_;
+            return status_.raw;
         default:
             throw std::runtime_error("Invalid SI register address: " + std::to_string(static_cast<u32>(address)));
     }
 }
 
 void SI::write_register(u32 address, u32 value) {
-    // TODO: SI DMA is completely unimplemented - critical for controller input!
     switch (address) {
         case SI_REGISTERS_ADDRESS::SI_DRAM_ADDR:
-            dram_addr_ = value & 0x00FFFFFF;
+            dram_addr_.raw = value & 0x00FFFFFF;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD64B:
-            pif_ad_rd64b_ = value & 0x000007FC;
-            // TODO: Trigger 64-byte DMA read from PIF RAM to RDRAM
-            // TODO: Set SI_STATUS busy bit during transfer
-            // TODO: Generate SI interrupt when DMA completes
+            pif_ad_rd64b_.raw = value & 0x000007FC;
+            pif_.dma_read_to_rdram(rdram_, dram_addr_.address);
+            mi_.set_interrupt(MI_INTERRUPT_SI);
+            status_.interrupt = 1;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR4B:
-            pif_ad_wr4b_ = value;
-            // TODO: Trigger 4-byte DMA write from RDRAM to PIF RAM
+            // !! Broken
+            pif_ad_wr4b_.raw = value;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_WR64B:
-            pif_ad_wr64b_ = value;
-            // TODO: Trigger 64-byte DMA write from RDRAM to PIF RAM
-            // TODO: This triggers PIF command processing (controller polling, etc.)
+            pif_ad_wr64b_.raw = value;
+            pif_.dma_write_from_rdram(rdram_, dram_addr_.address);
+            mi_.set_interrupt(MI_INTERRUPT_SI);
+            status_.interrupt = 1;
             break;
         case SI_REGISTERS_ADDRESS::SI_PIF_AD_RD4B:
-            pif_ad_rd4b_ = value;
-            // TODO: Trigger 4-byte DMA read from PIF RAM to RDRAM
+            // !! Broken
+            pif_ad_rd4b_.raw = value;
             break;
         case SI_REGISTERS_ADDRESS::SI_STATUS:
             // Writing any value clears SI interrupt
