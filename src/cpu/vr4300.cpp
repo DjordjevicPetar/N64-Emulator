@@ -52,6 +52,12 @@ u32 VR4300::execute_next_instruction()
     if (instruction_entry.execute != nullptr) {
         cycles = instruction_entry.execute(*this, current_instruction_);
     } else {
+        static u32 ri_count = 0;
+        if (ri_count++ < 10)
+            fprintf(stderr, "[RI] Unimplemented instr=0x%08X op=%u rs=%u rt=%u funct=%u PC=0x%08llX\n",
+                    current_instruction_.raw, (unsigned)current_instruction_.i_type.opcode,
+                    (unsigned)current_instruction_.i_type.rs, (unsigned)current_instruction_.i_type.rt,
+                    (unsigned)current_instruction_.r_type.funct, (unsigned long long)(pc_ - 4));
         cp0_.raise_exception(ExceptionCode::RI);
     }
 
