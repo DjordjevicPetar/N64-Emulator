@@ -148,6 +148,10 @@ void N64System::run()
                     rdram_.read_memory<u32>((cpu_.pc() - 4) & 0x1FFFFFFF));
         } else if (total_instructions == 1000) {
             fprintf(stderr, "[CPU] ... (1K instructions reached, PC=0x%08llX)\n", (unsigned long long)cpu_.pc());
+        } else if (total_instructions % 10000 == 0 && total_instructions <= 500000) {
+            fprintf(stderr, "[CPU] %lluK PC=0x%08llX\n",
+                    (unsigned long long)(total_instructions / 1000),
+                    (unsigned long long)cpu_.pc());
         } else if (total_instructions % 1000000 == 0) {
             fprintf(stderr, "[CPU] %lluM instr, PC=0x%08llX, VI: origin=0x%X width=%u type=%u\n",
                     (unsigned long long)(total_instructions / 1000000),

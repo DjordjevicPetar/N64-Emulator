@@ -82,7 +82,8 @@ void PI::write_register(u32 address, u32 value) {
             break;
         case PI_RD_LEN:
             rd_len_.raw = value & 0x00FFFFFF;
-            // Start read DMA: Cart -> RDRAM
+            fprintf(stderr, "[PI] DMA start: cart=0x%08X -> dram=0x%08X len=0x%X\n",
+                    cart_addr_.raw, dram_addr_.raw, rd_len_.raw + 1);
             dma_busy_ = true;
             status_.dma_busy = 1;
             set_counters();
@@ -170,6 +171,7 @@ void PI::process_passed_cycles(u32 cycles) {
     // Check if transfer complete
     u32& len = is_reading_ ? rd_len_.raw : wr_len_.raw;
     if (len == 0) {
+        fprintf(stderr, "[PI] DMA complete\n");
         dma_busy_ = false;
         status_.dma_busy = 0;
         is_reading_ = false;

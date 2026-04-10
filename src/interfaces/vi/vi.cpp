@@ -83,15 +83,19 @@ u32 VI::read_register(u32 address) const {
 void VI::write_register(u32 address, u32 value) {
     switch (address) {
         case VI_CTRL:
+            fprintf(stderr, "[VI] CTRL = 0x%08X (type=%u)\n", value, value & 3);
             ctrl_.raw = value & 0x0001FBFF;
             break;
         case VI_ORIGIN:
+            fprintf(stderr, "[VI] ORIGIN = 0x%08X\n", value);
             origin_.raw = value & 0x00FFFFFF;
             break;
         case VI_WIDTH:
+            fprintf(stderr, "[VI] WIDTH = %u\n", value);
             width_.raw = value & 0x00000FFF;
             break;
         case VI_V_INTR:
+            fprintf(stderr, "[VI] V_INTR = %u\n", value);
             v_intr_.raw = value & 0x000003FF;
             break;
         case VI_V_CURRENT:
@@ -102,9 +106,11 @@ void VI::write_register(u32 address, u32 value) {
             burst_.raw = value & 0x3FFFFFFF;
             break;
         case VI_V_TOTAL:
+            fprintf(stderr, "[VI] V_TOTAL = %u\n", value & 0x3FF);
             v_total_.raw = value & 0x000003FF;
             break;
         case VI_H_TOTAL:
+            fprintf(stderr, "[VI] H_TOTAL = %u\n", value & 0xFFF);
             h_total_.raw = value & 0x001F0FFF;
             break;
         case VI_H_TOTAL_LEAP:
