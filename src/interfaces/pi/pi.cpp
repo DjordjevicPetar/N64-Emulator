@@ -83,20 +83,21 @@ void PI::write_register(u32 address, u32 value) {
             break;
         case PI_RD_LEN:
             rd_len_.raw = value & 0x00FFFFFF;
-            fprintf(stderr, "[PI] DMA start: cart=0x%08X -> dram=0x%08X len=0x%X\n",
-                    cart_addr_.raw, dram_addr_.raw, rd_len_.raw + 1);
-            dma_busy_ = true;
-            status_.dma_busy = 1;
-            set_counters();
-            is_reading_ = true;
-            break;
-        case PI_WR_LEN:
-            wr_len_.raw = value & 0x00FFFFFF;
-            // Start write DMA: RDRAM -> Cart (SRAM/FlashRAM)
+            fprintf(stderr, "[PI] DMA start RDRAM->Cart: dram=0x%08X -> cart=0x%08X len=0x%X\n",
+                    dram_addr_.raw, cart_addr_.raw, rd_len_.raw + 1);
             dma_busy_ = true;
             status_.dma_busy = 1;
             set_counters();
             is_writing_ = true;
+            break;
+        case PI_WR_LEN:
+            wr_len_.raw = value & 0x00FFFFFF;
+            fprintf(stderr, "[PI] DMA start Cart->RDRAM: cart=0x%08X -> dram=0x%08X len=0x%X\n",
+                    cart_addr_.raw, dram_addr_.raw, wr_len_.raw + 1);
+            dma_busy_ = true;
+            status_.dma_busy = 1;
+            set_counters();
+            is_reading_ = true;
             break;
         case PI_STATUS:
             // Writing to status register
