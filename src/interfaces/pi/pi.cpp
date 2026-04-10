@@ -171,7 +171,8 @@ void PI::process_passed_cycles(u32 cycles) {
     if (release_counter_ > 0) return;
 
     // Check if transfer complete
-    u32& len = is_reading_ ? rd_len_.raw : wr_len_.raw;
+    // is_reading_ (Cart→RDRAM) uses wr_len_, is_writing_ (RDRAM→Cart) uses rd_len_
+    u32& len = is_reading_ ? wr_len_.raw : rd_len_.raw;
     if (len == 0) {
         fprintf(stderr, "[PI] DMA complete: cart=0x%08X dram=0x%08X %s\n",
                 cart_addr_.raw, dram_addr_.raw,
@@ -228,7 +229,8 @@ void PI::transfer_page() {
     u32 bytes_in_page = page_size - (cart_addr_.raw & page_mask);
     
     // Don't transfer more than remaining length
-    u32& len = is_reading_ ? rd_len_.raw : wr_len_.raw;
+    // is_reading_ (Cart→RDRAM) uses wr_len_, is_writing_ (RDRAM→Cart) uses rd_len_
+    u32& len = is_reading_ ? wr_len_.raw : rd_len_.raw;
     u32 bytes_to_transfer = (bytes_in_page < len + 1) ? bytes_in_page : (len + 1);
     
     if (is_reading_) {
