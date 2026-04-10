@@ -9,3 +9,5 @@ n64_asan
 *.log
 *.eep
 tmp_*log.txt
+log-2.txt
+*.txt
