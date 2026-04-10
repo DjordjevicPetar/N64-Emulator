@@ -1,6 +1,5 @@
 #include "cp0.hpp"
 #include "vr4300.hpp"
-#include <stdexcept>
 #include <cstdio>
 
 namespace n64::cpu {
@@ -130,7 +129,7 @@ u32 CP0::translate_address(u64 virtual_address, bool is_write) {
             // KSEG3 - TLB mapped
             return tlb_lookup(virtual_address, is_write);
         default:
-            throw std::runtime_error("Invalid address segment");
+            return 0;
     }
 }
 

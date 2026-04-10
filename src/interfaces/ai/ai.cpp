@@ -1,6 +1,4 @@
 #include "ai.hpp"
-#include <stdexcept>
-#include <string>
 
 namespace n64::interfaces {
 
@@ -68,7 +66,7 @@ u32 AI::read_register(u32 address) const {
         case AI_REGISTERS_ADDRESS::AI_BITRATE:
             return get_bytes_remaining();
         default:
-            throw std::runtime_error("Invalid AI register address: " + std::to_string(static_cast<u32>(address)));
+            return 0;
     }
 }
 
@@ -123,7 +121,7 @@ void AI::write_register(u32 address, u32 value) {
             bitrate_.raw = value & 0x0000000F;
             break;
         default:
-            throw std::runtime_error("Invalid AI register address: " + std::to_string(static_cast<u32>(address)));
+            return;
     }
 }
 

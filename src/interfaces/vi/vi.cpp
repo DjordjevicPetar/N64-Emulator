@@ -1,6 +1,4 @@
 #include "vi.hpp"
-#include <stdexcept>
-#include <string>
 #include <iostream>
 
 namespace n64::interfaces {
@@ -76,7 +74,7 @@ u32 VI::read_register(u32 address) const {
         case VI_STAGED_DATA:
             return staged_data_.raw;
         default:
-            throw std::runtime_error("Invalid VI register address: " + std::to_string(address));
+            return 0;
     }
 }
 
@@ -138,7 +136,7 @@ void VI::write_register(u32 address, u32 value) {
             staged_data_.raw = value;
             break;
         default:
-            throw std::runtime_error("Invalid VI register address: " + std::to_string(address));
+            break;
     }
 }
 

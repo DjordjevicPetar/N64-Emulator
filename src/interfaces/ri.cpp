@@ -1,6 +1,4 @@
 #include "ri.hpp"
-#include <stdexcept>
-#include <string>
 
 namespace n64::interfaces {
 
@@ -46,7 +44,7 @@ u32 RI::read_register(u32 address) const {
         case RI_REGISTERS_ADDRESS::RI_BANK_STATUS:
             return bank_status_;
         default:
-            throw std::runtime_error("Invalid RI register address: " + std::to_string(static_cast<u32>(address)));
+            return 0;
     }
 }
 
@@ -77,7 +75,7 @@ void RI::write_register(u32 address, u32 value) {
             bank_status_ = value & 0x0000FFFF;
             break;
         default:
-            throw std::runtime_error("Invalid RI register address: " + std::to_string(static_cast<u32>(address)));
+            return;
     }
 }
 

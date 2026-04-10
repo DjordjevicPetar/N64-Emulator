@@ -3,9 +3,6 @@
 #include "../../memory/rdram.hpp"
 
 #include <algorithm>
-#include <stdexcept>
-#include <string>
-
 namespace n64::rdp {
 
 float RDP::bytes_per_pixel(Size size) const {
@@ -14,7 +11,7 @@ float RDP::bytes_per_pixel(Size size) const {
         case Size::SIZE_8B: return 1.0f;
         case Size::SIZE_16B: return 2.0f;
         case Size::SIZE_32B: return 4.0f;
-        default: throw std::runtime_error("Invalid size: " + std::to_string(static_cast<u8>(size)));
+        default: return 1.0f;
     }
 }
 
@@ -79,7 +76,7 @@ Color RDP::fetch_pixel_tmem(u32 addr, Size size, Format format, bool odd_texel, 
             break;
         }
         default:
-            throw std::runtime_error("Invalid texture size: " + std::to_string(static_cast<u8>(texture_image_.size)));
+            return Color();
     }
     return color;
 }
@@ -103,7 +100,7 @@ void RDP::write_pixel_framebuffer(u32 addr, const Color& color) {
             break;
         }
     default:
-        throw std::runtime_error("Invalid color image size: " + std::to_string(static_cast<u8>(color_image_.size)));
+        return;
     }
 }
 

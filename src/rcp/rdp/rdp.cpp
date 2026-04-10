@@ -4,9 +4,6 @@
 #include "../../interfaces/mi.hpp"
 
 #include <algorithm>
-#include <stdexcept>
-#include <string>
-
 namespace n64::rdp {
 
 // RDP implementation roadmap:
@@ -121,7 +118,7 @@ u32 RDP::read_register(u32 address) const {
         case DPS_BUFTEST_ADDR: return buftest_addr_.raw;
         case DPS_BUFTEST_DATA: return buftest_data_.raw;
         default:
-            throw std::runtime_error("Invalid RDP register address: " + std::to_string(address));
+            return 0;
     }
 }
 
@@ -156,7 +153,7 @@ void RDP::write_register(u32 address, u32 value) {
         case DPS_BUFTEST_ADDR: buftest_addr_.raw = value & 0x0000007F; break;
         case DPS_BUFTEST_DATA: buftest_data_.raw = value; break;
         default:
-            throw std::runtime_error("Invalid RDP register address: " + std::to_string(address));
+            return;
     }
 }
 

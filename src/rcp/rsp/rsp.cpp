@@ -1,8 +1,6 @@
 #include "rsp.hpp"
 #include "../rdp/rdp.hpp"
 #include "../../memory/memory_constants.hpp"
-#include <stdexcept>
-#include <string>
 #include <cstdio>
 
 // TODO: RSP needs work on cycle accuracy:
@@ -59,7 +57,7 @@ T RSP::read(u32 address) const {
         return read_register(address);
     }   
 
-    throw std::runtime_error("Invalid RSP address: " + std::to_string(address));
+    return T{};
 }
 
 template<typename T>
@@ -81,7 +79,7 @@ void RSP::write(u32 address, T value) {
         return;
     }
 
-    throw std::runtime_error("Invalid RSP address: " + std::to_string(address));
+    return;
 }
 
 u32 RSP::read_register(u32 address) const {
@@ -104,7 +102,7 @@ u32 RSP::read_register(u32 address) const {
         case RSP_REGISTERS_ADDRESS::RSP_PC:
             return pc_;
         default:
-            throw std::runtime_error("Invalid RSP register address: " + std::to_string(address));
+            return 0;
     }
 }
 
@@ -182,7 +180,7 @@ void RSP::write_register(u32 address, u32 value) {
             pc_ = value & 0x00000FFC;
             return;
         default:
-            throw std::runtime_error("Invalid RSP register address: " + std::to_string(address));
+            return;
     }
 }
 

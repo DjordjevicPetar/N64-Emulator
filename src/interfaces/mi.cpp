@@ -1,6 +1,4 @@
 #include "mi.hpp"
-#include <stdexcept>
-#include <string>
 #include <cstdio>
 
 namespace n64::interfaces {
@@ -29,7 +27,7 @@ u32 MI::read_register(u32 address) const {
         case MI_REGISTERS_ADDRESS::MI_MASK:
             return mask_;
         default:
-            throw std::runtime_error("Invalid MI register address: " + std::to_string(static_cast<u32>(address)));
+            return 0;
     }
 }
 
@@ -58,7 +56,7 @@ void MI::write_register(u32 address, u32 value) {
             break;
         }
         default:
-            throw std::runtime_error("Invalid MI register address: " + std::to_string(static_cast<u32>(address)));
+            return;
     }
 }
 

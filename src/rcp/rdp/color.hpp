@@ -1,9 +1,8 @@
 #pragma once
 
 #include "../../utils/types.hpp"
+#include <algorithm>
 #include <cstdlib>
-#include <stdexcept>
-#include <string>
 
 namespace n64::rdp {
 
@@ -41,7 +40,7 @@ public:
                 alpha = get_bits(color, 7, 0);
                 break;
             default:
-                throw std::runtime_error("Invalid format: " + std::to_string(static_cast<u8>(format)));
+                return;
         }
     }
 
@@ -58,7 +57,7 @@ public:
                 alpha = get_bits(color, 7, 0);
                 break;
             default:
-                throw std::runtime_error("Invalid format: " + std::to_string(static_cast<u8>(format)));
+                return;
         }
     }
 

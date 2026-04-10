@@ -1,6 +1,4 @@
 #include "si.hpp"
-#include <stdexcept>
-#include <string>
 #include <cstdio>
 
 namespace n64::interfaces {
@@ -44,7 +42,7 @@ u32 SI::read_register(u32 address) const {
         case SI_REGISTERS_ADDRESS::SI_STATUS:
             return status_.raw;
         default:
-            throw std::runtime_error("Invalid SI register address: " + std::to_string(static_cast<u32>(address)));
+            return 0;
     }
 }
 
@@ -80,7 +78,7 @@ void SI::write_register(u32 address, u32 value) {
             mi_.clear_interrupt(MI_INTERRUPT_SI);
             break;
         default:
-            throw std::runtime_error("Invalid SI register address: " + std::to_string(static_cast<u32>(address)));
+            return;
     }
 }
 

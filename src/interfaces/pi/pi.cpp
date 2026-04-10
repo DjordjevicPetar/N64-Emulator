@@ -2,8 +2,6 @@
 #include "../../memory/memory_constants.hpp"
 #include "../../memory/rom.hpp"
 #include "../../memory/rdram.hpp"
-#include <stdexcept>
-#include <string>
 
 namespace n64::interfaces {
 
@@ -68,7 +66,7 @@ u32 PI::read_register(u32 address) const {
         case PI_BSD_DOM2_RLS:
             return bsd_dom2_rls_.raw;
         default:
-            throw std::runtime_error("Invalid PI register address: " + std::to_string(address));
+            return 0;
     }
 }
 
@@ -135,7 +133,7 @@ void PI::write_register(u32 address, u32 value) {
             bsd_dom2_rls_.raw = value & 0x00000003;
             break;
         default:
-            throw std::runtime_error("Invalid PI register address: " + std::to_string(address));
+            return;
     }
 }
 

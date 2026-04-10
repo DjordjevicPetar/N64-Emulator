@@ -1,7 +1,4 @@
 #include "vu.hpp"
-#include <stdexcept>
-#include <string>
-
 namespace n64::rcp {
 
 VU::VU() : gpr_{}, accumulator_{0}, vcc_{0}, vco_{0}, vce_{0} {
@@ -45,7 +42,7 @@ u16 VU::read_control_register(u32 index) const
         case 0: return vco_;
         case 1: return vcc_;
         case 2: return vce_;
-        default: throw std::runtime_error("Invalid VU control register index: " + std::to_string(index));
+        default: return 0;
     }
 }
 
@@ -55,7 +52,7 @@ void VU::write_control_register(u32 index, u16 value)
         case 0: vco_ = value; break;
         case 1: vcc_ = value; break;
         case 2: vce_ = value & 0x00FF; break;
-        default: throw std::runtime_error("Invalid VU control register index: " + std::to_string(index));
+        default: break;
     }
 }
 

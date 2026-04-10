@@ -2,8 +2,6 @@
 #include "rdp_log.hpp"
 #include "../../memory/rdram.hpp"
 
-#include <stdexcept>
-#include <string>
 #include <algorithm>
 
 namespace n64::rdp {
@@ -458,7 +456,7 @@ u32 RDP::fill_rectangle(u64 command) {
         case 3:
             return fill_rectangle(fill_rect);
         default:
-            throw std::runtime_error("Invalid cycle type: " + std::to_string(cycle_type_));
+            return 0;
     }
 }
 
