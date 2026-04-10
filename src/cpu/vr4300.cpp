@@ -96,7 +96,11 @@ u32 VR4300::execute_next_instruction()
 
     cp0_.handle_random_register();
     cp0_.handle_count_register(cycles);
-    cp0_.check_interrupts();
+    if (interrupt_inhibit_) {
+        interrupt_inhibit_ = false;
+    } else {
+        cp0_.check_interrupts();
+    }
 
     if (should_branch) {
         pc_ = target;

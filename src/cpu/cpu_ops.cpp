@@ -1179,6 +1179,7 @@ u32 ERET(VR4300& cpu, const Instruction& instr) {
                     (unsigned long long)eret_count, (unsigned long long)cpu.cp0().epc());
     }
     cpu.set_LLbit(false);
+    cpu.set_interrupt_inhibit();
     return 1;
 }
 

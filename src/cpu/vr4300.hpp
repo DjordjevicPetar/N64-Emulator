@@ -35,6 +35,8 @@ public:
     [[nodiscard]] bool get_LLbit() const { return ll_bit_; }
     void set_LLbit(bool value) { ll_bit_ = value; }
 
+    void set_interrupt_inhibit() { interrupt_inhibit_ = true; }
+
     [[nodiscard]] bool in_delay_slot() const { return branch_pending_ || should_branch;}
     void reset_delay_slot() { should_branch = false; branch_pending_ = false; }
 
@@ -73,6 +75,9 @@ private:
     bool branch_pending_ = false;
     u64 branch_target_ = 0;
     bool should_branch = false;
+
+    // ERET inhibits interrupts for 1 instruction (VR4300 hardware behavior)
+    bool interrupt_inhibit_ = false;
 
     void read_next_instruction();
 };
