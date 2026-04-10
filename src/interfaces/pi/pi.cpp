@@ -71,6 +71,9 @@ u32 PI::read_register(u32 address) const {
 }
 
 void PI::write_register(u32 address, u32 value) {
+    static u32 pi_wr_log = 0;
+    if (pi_wr_log++ < 30)
+        fprintf(stderr, "[PI] write_register addr=0x%08X val=0x%08X\n", address, value);
     switch (address) {
         case PI_DRAM_ADDR:
             dram_addr_.raw = value & 0x00FFFFFE;
@@ -169,7 +172,9 @@ void PI::process_passed_cycles(u32 cycles) {
     // Check if transfer complete
     u32& len = is_reading_ ? rd_len_.raw : wr_len_.raw;
     if (len == 0) {
-        fprintf(stderr, "[PI] DMA complete\n");
+        fprintf(stderr, "[PI] DMA complete: cart=0x%08X dram=0x%08X %s\n",
+                cart_addr_.raw, dram_addr_.raw,
+                is_reading_ ? "READ(cart->dram)" : "WRITE(dram->cart)");
         dma_busy_ = false;
         status_.dma_busy = 0;
         is_reading_ = false;
