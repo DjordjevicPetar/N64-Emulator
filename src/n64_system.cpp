@@ -106,6 +106,15 @@ u32 N64System::boot()
     fprintf(stderr, "[BOOT] After copy, value at phys 0x003359B0 = 0x%08X\n",
             rdram_.read_memory<u32>(0x003359B0));
 
+    fprintf(stderr, "[BOOT] Idle loop instructions (0x8027F540-0x8027F570):\n");
+    for (u32 addr = 0x0027F540; addr <= 0x0027F570; addr += 4) {
+        u32 instr = rdram_.read_memory<u32>(addr);
+        fprintf(stderr, "  0x%08X: 0x%08X  op=%u rs=%u rt=%u rd=%u imm=%d\n",
+                0x80000000 + addr, instr,
+                (instr >> 26) & 0x3F, (instr >> 21) & 0x1F, (instr >> 16) & 0x1F,
+                (instr >> 11) & 0x1F, (s16)(instr & 0xFFFF));
+    }
+
     return entry_point;
 }
 
