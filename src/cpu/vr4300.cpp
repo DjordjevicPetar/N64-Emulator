@@ -14,8 +14,35 @@ VR4300::VR4300(memory::MemoryMap& memory)
 
 void VR4300::read_next_instruction()
 {
-    current_instruction_ = Instruction(read_memory<u32>(pc_));
+    size_t idx = (pc_ >> 2) & ICACHE_MASK;
+    auto& entry = icache_[idx];
+    if (entry.tag == pc_) {
+        current_instruction_ = Instruction(entry.instruction);
+    } else {
+        u32 instr = read_memory<u32>(pc_);
+        entry.tag = pc_;
+        entry.instruction = instr;
+        current_instruction_ = Instruction(instr);
+    }
     pc_ += 4;
+}
+
+void VR4300::icache_invalidate(u64 virtual_address)
+{
+    u64 line_start = virtual_address & ~0x1FULL;
+    for (u64 offset = 0; offset < 32; offset += 4) {
+        size_t idx = ((line_start + offset) >> 2) & ICACHE_MASK;
+        if ((icache_[idx].tag & ~0x1FULL) == line_start) {
+            icache_[idx].tag = ~0ULL;
+        }
+    }
+}
+
+void VR4300::icache_invalidate_all()
+{
+    for (auto& entry : icache_) {
+        entry.tag = ~0ULL;
+    }
 }
 
 void VR4300::delay_branch(u64 target)

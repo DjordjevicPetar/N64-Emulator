@@ -59,6 +59,10 @@ public:
     template <typename T>
     void write_memory(u64 address, T value);
 
+    // I-cache invalidation (called by CACHE instruction)
+    void icache_invalidate(u64 virtual_address);
+    void icache_invalidate_all();
+
 private:
     // Registers
     std::array<u64, 32> gpr_{};
@@ -86,6 +90,16 @@ private:
     // inside translate_address). Prevents the instruction from continuing to modify
     // registers/memory after the exception, and prevents branch/interrupt handling.
     bool exception_pending_ = false;
+
+    // Instruction cache (VR4300 has 16KB I-cache, 32-byte lines, 2-way)
+    // Simplified as direct-mapped with 4096 entries (16KB / 4 bytes per word)
+    static constexpr size_t ICACHE_ENTRIES = 4096;
+    static constexpr size_t ICACHE_MASK = ICACHE_ENTRIES - 1;
+    struct ICacheEntry {
+        u64 tag = ~0ULL;
+        u32 instruction = 0;
+    };
+    std::array<ICacheEntry, ICACHE_ENTRIES> icache_{};
 
     void read_next_instruction();
 };

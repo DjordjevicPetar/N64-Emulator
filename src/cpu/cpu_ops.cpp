@@ -568,7 +568,32 @@ u32 SDC1(VR4300& cpu, const Instruction& instr) {
 
 // Cache
 u32 CACHE(VR4300& cpu, const Instruction& instr) {
-    // TODO: Implement cache operations (requires TLB for virtual-to-physical translation)
+    u8 op = instr.i_type.rt;
+    u64 address = cpu.gpr(instr.i_type.rs) + sign_extend16(instr.i_type.immediate);
+
+    switch (op) {
+        case 0x00: // Index Invalidate I-cache
+            cpu.icache_invalidate(address);
+            break;
+        case 0x10: // Hit Invalidate I-cache
+            cpu.icache_invalidate(address);
+            break;
+        case 0x14: // Fill I-cache
+            cpu.icache_invalidate(address);
+            break;
+        case 0x04: // Index Load Tag I-cache
+        case 0x08: // Index Store Tag I-cache
+        case 0x01: // Index Writeback Invalidate D-cache
+        case 0x05: // Index Load Tag D-cache
+        case 0x09: // Index Store Tag D-cache
+        case 0x0D: // Create Dirty Exclusive D-cache
+        case 0x11: // Hit Invalidate D-cache
+        case 0x15: // Hit Writeback Invalidate D-cache
+        case 0x19: // Create Dirty Exclusive D-cache
+            break;
+        default:
+            break;
+    }
     return 1;
 }
 
