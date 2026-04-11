@@ -94,11 +94,17 @@ u32 N64System::boot()
             copy_size, ROM_CODE_OFFSET, rdram_dest);
 
     for (size_t i = 0; i < copy_size; ++i) {
-        rdram_.write_memory<u8>(
-            rdram_dest + i, 
-            rom_.read<u8>(memory::ROM_START_ADDRESS + ROM_CODE_OFFSET + i)
-        );
+        u32 dest = rdram_dest + static_cast<u32>(i);
+        u8 byte = rom_.read<u8>(memory::ROM_START_ADDRESS + ROM_CODE_OFFSET + i);
+        if (dest >= 0x003359B0 && dest < 0x003359B4) {
+            fprintf(stderr, "[BOOT-WP] Writing byte 0x%02X to phys 0x%08X (i=%zu)\n",
+                    byte, dest, i);
+        }
+        rdram_.write_memory<u8>(dest, byte);
     }
+
+    fprintf(stderr, "[BOOT] After copy, value at phys 0x003359B0 = 0x%08X\n",
+            rdram_.read_memory<u32>(0x003359B0));
 
     return entry_point;
 }
@@ -153,7 +159,7 @@ void N64System::run()
                     (unsigned long long)(total_instructions / 1000),
                     (unsigned long long)cpu_.pc());
         } else if (total_instructions % 1000000 == 0) {
-            fprintf(stderr, "[CPU] %lluM instr, PC=0x%08llX, VI: origin=0x%X width=%u type=%u, MI: int=0x%X mask=0x%X, RSP: halt=%u\n",
+            fprintf(stderr, "[CPU] %lluM instr, PC=0x%08llX, VI: origin=0x%X width=%u type=%u, MI: int=0x%X mask=0x%X, RSP: halt=%u, thr=0x%08X\n",
                     (unsigned long long)(total_instructions / 1000000),
                     (unsigned long long)cpu_.pc(),
                     vi_.origin().origin,
@@ -161,7 +167,8 @@ void N64System::run()
                     vi_.ctrl().type,
                     mi_.interrupt_reg(),
                     mi_.mask_reg(),
-                    (unsigned)rsp_.status().halt);
+                    (unsigned)rsp_.status().halt,
+                    rdram_.read_memory<u32>(0x003359B0));
         }
 
         rsp_.process_passed_cycles(cycles);
