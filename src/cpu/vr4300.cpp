@@ -10,6 +10,7 @@ static int trace_idx = 0;
 VR4300::VR4300(memory::MemoryMap& memory)
     : memory_(memory)
 {
+    icache_invalidate_all();
 }
 
 void VR4300::read_next_instruction()

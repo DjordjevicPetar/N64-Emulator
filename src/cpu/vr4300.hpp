@@ -96,10 +96,10 @@ private:
     static constexpr size_t ICACHE_ENTRIES = 4096;
     static constexpr size_t ICACHE_MASK = ICACHE_ENTRIES - 1;
     struct ICacheEntry {
-        u64 tag = ~0ULL;
-        u32 instruction = 0;
+        u64 tag;
+        u32 instruction;
     };
-    std::array<ICacheEntry, ICACHE_ENTRIES> icache_{};
+    std::array<ICacheEntry, ICACHE_ENTRIES> icache_;
 
     void read_next_instruction();
 };
