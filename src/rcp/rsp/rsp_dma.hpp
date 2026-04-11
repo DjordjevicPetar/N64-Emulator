@@ -1,6 +1,5 @@
 #pragma once
 
-#include <queue>
 #include "../../utils/types.hpp"
 
 namespace n64::memory {
@@ -10,8 +9,6 @@ namespace n64::memory {
 namespace n64::rcp {
 
 class RSP;  // Forward declaration
-
-constexpr float DMA_BYTES_PER_CYCLE_FP = 3.7f;
 
 struct DMARequest {
     bool is_read;       // true = RDRAM to SP, false = SP to RDRAM
@@ -44,8 +41,6 @@ public:
 private:
     RSP& rsp_;
     memory::RDRAM& rdram_;
-    std::queue<DMARequest> request_queue_;
-    float to_transfer_ = 0.0f;
 };
 
 } // namespace n64::rcp

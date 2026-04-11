@@ -87,6 +87,8 @@ private:
 
     RSPDMA dma_;
     float rsp_cycle_accumulator_ = 0.0f;
+    u64 rsp_instr_count_ = 0;
+    u32 rsp_ri_count_ = 0;
 };
 
 } // namespace n64::rcp

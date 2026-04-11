@@ -172,8 +172,11 @@ void RSP::write_register(u32 address, u32 value) {
             clear_set_resolver(status_.raw, get_bit(value, 19), get_bit(value, 20), 12); // signal5
             clear_set_resolver(status_.raw, get_bit(value, 21), get_bit(value, 22), 13); // signal6
             clear_set_resolver(status_.raw, get_bit(value, 23), get_bit(value, 24), 14); // signal7
-            if (was_halted && !status_.halt)
+            if (was_halted && !status_.halt) {
                 fprintf(stderr, "[RSP] Started (halt cleared), PC=0x%03X\n", pc_);
+                rsp_instr_count_ = 0;
+                rsp_ri_count_ = 0;
+            }
             return;
         }
         case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:
@@ -193,13 +196,9 @@ void RSP::execute_next_instruction()
         return;
     }
 
-    static u64 rsp_instr_since_start = 0;
-    rsp_instr_since_start++;
-    if (rsp_instr_since_start == 100000) {
+    rsp_instr_count_++;
+    if (rsp_instr_count_ == 100000) {
         fprintf(stderr, "[RSP] WARNING: 100K instructions without BREAK! PC=0x%03X\n", pc_);
-        fprintf(stderr, "  SU regs: r1=%08X r2=%08X r3=%08X r4=%08X r5=%08X r6=%08X\n",
-                su_.read_gpr(1), su_.read_gpr(2), su_.read_gpr(3),
-                su_.read_gpr(4), su_.read_gpr(5), su_.read_gpr(6));
     }
     
     auto instruction = fetch_instruction();
@@ -212,20 +211,11 @@ void RSP::execute_next_instruction()
     if (instruction_entry.execute) {
         instruction_entry.execute(*this, instruction);
     } else {
-        static u32 rsp_ri_count = 0;
-        if (rsp_ri_count++ < 10) {
+        if (rsp_ri_count_++ < 10) {
             fprintf(stderr, "[RSP] Unimplemented instr=0x%08X op=%u rs=%u rt=%u funct=%u PC=0x%03X\n",
                     instruction.raw, (unsigned)instruction.i_type.opcode,
                     (unsigned)instruction.r_type.rs, (unsigned)instruction.r_type.rt,
                     (unsigned)instruction.r_type.funct, (pc_ - 4) & 0xFFF);
-            if (rsp_ri_count == 1) {
-                fprintf(stderr, "[RSP] IMEM dump around stuck point (0x060-0x0A0):\n");
-                for (u32 addr = 0x060; addr < 0x0A0; addr += 4) {
-                    u32 w = (imem_[addr] << 24) | (imem_[addr+1] << 16) |
-                            (imem_[addr+2] << 8) | imem_[addr+3];
-                    fprintf(stderr, "  [0x%03X] 0x%08X\n", addr, w);
-                }
-            }
         }
     }
 
