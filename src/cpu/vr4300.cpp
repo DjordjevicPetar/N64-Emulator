@@ -223,6 +223,18 @@ void VR4300::write_memory(u64 address, T value)
     if (exception_pending_) return;
     u32 translated_address = translate_address(address, true);
     if (exception_pending_) return;
+
+    constexpr u32 WATCH_ADDR = 0x003359B0;
+    if (translated_address <= WATCH_ADDR && translated_address + sizeof(T) > WATCH_ADDR) {
+        static int wp_count = 0;
+        if (wp_count < 80) {
+            fprintf(stderr, "[WATCHPOINT] PC=0x%08llX write phys=0x%08X size=%zu val=0x%llX vaddr=0x%llX\n",
+                    (unsigned long long)(pc_ - 4), translated_address,
+                    sizeof(T), (unsigned long long)value, (unsigned long long)address);
+            wp_count++;
+        }
+    }
+
     memory_.write<T>(translated_address, value);
 }
 

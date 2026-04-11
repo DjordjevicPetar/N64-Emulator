@@ -290,10 +290,14 @@ void CP0::raise_exception(ExceptionCode code, u8 ce) {
 }
 
 void CP0::raise_address_exception(ExceptionCode code, u64 address) {
-    fprintf(stderr, "[EXC] Address exception: %s addr=0x%016llX PC=0x%08llX\n",
-            code == ExceptionCode::ADEL ? "ADEL" : "ADES",
-            (unsigned long long)address,
-            (unsigned long long)(cpu_.pc() - 4));
+    static u32 addr_exc_count = 0;
+    addr_exc_count++;
+    if (addr_exc_count <= 10) {
+        fprintf(stderr, "[EXC] Address exception: %s addr=0x%016llX PC=0x%08llX\n",
+                code == ExceptionCode::ADEL ? "ADEL" : "ADES",
+                (unsigned long long)address,
+                (unsigned long long)(cpu_.pc() - 4));
+    }
     bad_vaddr_ = address;
     context_.bad_vpn2 = (address >> 13) & 0x7FFFF;
     raise_exception(code);
