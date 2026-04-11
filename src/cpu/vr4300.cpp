@@ -116,6 +116,9 @@ u32 VR4300::execute_next_instruction()
         opcode == 0x39 || opcode == 0x3D) && cp0_.status().cu1 == 0) {
         cp0_.raise_exception(ExceptionCode::CPU, 1);
         return cycles;
+    } else if (opcode == 0x12 || opcode == 0x32 || opcode == 0x3A) {
+        cp0_.raise_exception(ExceptionCode::CPU, 2);
+        return cycles;
     }
 
     auto& instruction_entry = instruction_table_.lookup(current_instruction_);
