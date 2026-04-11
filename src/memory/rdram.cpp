@@ -56,11 +56,9 @@ void RDRAM::write_memory(u32 address, T value)
     if (address + sizeof(T) <= RDRAM_MEMORY_SIZE) {
         constexpr u32 WATCH_ADDR = 0x003359B0;
         if (address <= WATCH_ADDR && address + sizeof(T) > WATCH_ADDR) {
-            static int wp_count = 0;
-            if (wp_count < 80) {
-                fprintf(stderr, "[RDRAM-WP] addr=0x%08X size=%zu val=0x%llX\n",
+            if (sizeof(T) != 4 || (value & 0xFF000000) != 0x80000000) {
+                fprintf(stderr, "[RDRAM-WP] addr=0x%08X sz=%zu val=0x%llX\n",
                         address, sizeof(T), (unsigned long long)value);
-                wp_count++;
             }
         }
         for (size_t i = 0; i < sizeof(T); i++) {
