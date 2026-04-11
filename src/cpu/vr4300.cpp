@@ -229,10 +229,27 @@ void VR4300::write_memory(u64 address, T value)
         static int wp_count = 0;
         wp_count++;
         u32 cur_val = memory_.read<u32>(WATCH_ADDR);
-        if (wp_count <= 20 || sizeof(T) != 4 || (value & 0xFF000000) != 0x80000000) {
-            fprintf(stderr, "[WATCHPOINT] #%d PC=0x%08llX phys=0x%08X sz=%zu val=0x%llX cur=0x%08X\n",
+        if (sizeof(T) != 4 || (static_cast<u32>(value) & 0xFF000000) != 0x80000000) {
+            fprintf(stderr, "[WATCHPOINT] #%d PC=0x%08llX phys=0x%08X sz=%zu val=0x%llX cur=0x%08X\n"
+                    "  instr=0x%08X rs=%u rt=%u imm=%d\n"
+                    "  $t0=0x%llX $t1=0x%llX $t2=0x%llX $t3=0x%llX\n"
+                    "  $a0=0x%llX $a1=0x%llX $v0=0x%llX $v1=0x%llX\n"
+                    "  $k0=0x%llX $k1=0x%llX $sp=0x%llX $ra=0x%llX\n",
                     wp_count, (unsigned long long)(pc_ - 4), translated_address,
-                    sizeof(T), (unsigned long long)value, cur_val);
+                    sizeof(T), (unsigned long long)value, cur_val,
+                    current_instruction_.raw,
+                    (unsigned)current_instruction_.i_type.rs,
+                    (unsigned)current_instruction_.i_type.rt,
+                    (int)(s16)current_instruction_.i_type.immediate,
+                    (unsigned long long)gpr_[8], (unsigned long long)gpr_[9],
+                    (unsigned long long)gpr_[10], (unsigned long long)gpr_[11],
+                    (unsigned long long)gpr_[4], (unsigned long long)gpr_[5],
+                    (unsigned long long)gpr_[2], (unsigned long long)gpr_[3],
+                    (unsigned long long)gpr_[26], (unsigned long long)gpr_[27],
+                    (unsigned long long)gpr_[29], (unsigned long long)gpr_[31]);
+        } else if (wp_count <= 20) {
+            fprintf(stderr, "[WATCHPOINT] #%d PC=0x%08llX sz=4 val=0x%08X (valid thread ptr)\n",
+                    wp_count, (unsigned long long)(pc_ - 4), (u32)value);
         }
     }
 
