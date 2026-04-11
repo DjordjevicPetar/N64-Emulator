@@ -103,6 +103,22 @@ u32 VR4300::execute_next_instruction()
         last_real_instr = current_instruction_.raw;
     }
 
+    static bool mio0_logged = false;
+    if (!mio0_logged && (pc_ - 4) >= 0x8027F500 && (pc_ - 4) <= 0x8027F5FF) {
+        mio0_logged = true;
+        fprintf(stderr, "[MIO0-ENTRY] PC=0x%08llX $a0=0x%llX $a1=0x%llX $a2=0x%llX $a3=0x%llX\n"
+                "  $t0=0x%llX $t1=0x%llX $t2=0x%llX $t3=0x%llX\n"
+                "  $s0=0x%llX $s1=0x%llX $s2=0x%llX $ra=0x%llX $sp=0x%llX\n",
+                (unsigned long long)(pc_ - 4),
+                (unsigned long long)gpr_[4], (unsigned long long)gpr_[5],
+                (unsigned long long)gpr_[6], (unsigned long long)gpr_[7],
+                (unsigned long long)gpr_[8], (unsigned long long)gpr_[9],
+                (unsigned long long)gpr_[10], (unsigned long long)gpr_[11],
+                (unsigned long long)gpr_[16], (unsigned long long)gpr_[17],
+                (unsigned long long)gpr_[18], (unsigned long long)gpr_[31],
+                (unsigned long long)gpr_[29]);
+    }
+
     u8 opcode = current_instruction_.i_type.opcode;
     // COP0 is always accessible in kernel mode; CU0 check only applies in user mode
     // Kernel mode = when EXL=0 && ERL=0 && KSU=0, OR when EXL=1 or ERL=1
