@@ -260,7 +260,7 @@ void RSP::process_passed_cycles(u32 cycles)
 void RSP::delay_branch(u32 target)
 {
     delay_branch_pending_ = true;
-    delay_pc_ = target & 0xFFF;
+    delay_pc_ = target & 0xFFC;
 }
 
 void RSP::set_breakpoint()
