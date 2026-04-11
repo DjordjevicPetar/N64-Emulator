@@ -197,7 +197,16 @@ void RSP::execute_next_instruction()
     delay_branch_pending_ = false;
 
     auto& instruction_entry = instruction_table_.lookup(instruction);
-    instruction_entry.execute(*this, instruction);
+    if (instruction_entry.execute) {
+        instruction_entry.execute(*this, instruction);
+    } else {
+        static u32 rsp_ri_count = 0;
+        if (rsp_ri_count++ < 10)
+            fprintf(stderr, "[RSP] Unimplemented instr=0x%08X op=%u rs=%u rt=%u funct=%u PC=0x%03X\n",
+                    instruction.raw, (unsigned)instruction.i_type.opcode,
+                    (unsigned)instruction.r_type.rs, (unsigned)instruction.r_type.rt,
+                    (unsigned)instruction.r_type.funct, (pc_ - 4) & 0xFFF);
+    }
 
     if (should_branch) {
         pc_ = target;

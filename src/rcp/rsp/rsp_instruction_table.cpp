@@ -10,6 +10,12 @@ RSPInstructionTable::RSPInstructionTable()
     for (auto& entry : special_table_) {
         entry = {"UNKNOWN", RSPInstructionType::SCALAR_TYPE, nullptr};
     }
+    for (auto& entry : regimm_table_) {
+        entry = {"UNKNOWN", RSPInstructionType::SCALAR_TYPE, nullptr};
+    }
+    for (auto& entry : cop0_table_) {
+        entry = {"UNKNOWN", RSPInstructionType::SCALAR_TYPE, nullptr};
+    }
     for (auto& entry : cop2_compute_table_) {
         entry = {"RESERVED", RSPInstructionType::VECTOR_TYPE, VRESERVED};
     }
