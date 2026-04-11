@@ -37,6 +37,8 @@ public:
     void clear_interrupt(MI_INTERRUPT_BITS interrupt);
 
     [[nodiscard]] bool check_interrupts() const;
+    [[nodiscard]] u32 interrupt_reg() const { return interrupt_; }
+    [[nodiscard]] u32 mask_reg() const { return mask_; }
 
 private:
     u32 mode_;

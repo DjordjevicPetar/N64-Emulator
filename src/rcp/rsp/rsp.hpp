@@ -79,7 +79,7 @@ private:
     u32 current_len_ = 0xFF8;
 
     RSPStatus status_;
-    u32 semaphore_;
+    mutable u32 semaphore_;
     u32 pc_;
 
     u32 delay_pc_;

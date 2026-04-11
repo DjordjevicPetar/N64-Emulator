@@ -97,8 +97,11 @@ u32 RSP::read_register(u32 address) const {
             return status_.dma_full;
         case RSP_REGISTERS_ADDRESS::RSP_DMA_BUSY:
             return status_.dma_busy;
-        case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:
-            return semaphore_;
+        case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE: {
+            u32 val = semaphore_;
+            semaphore_ = 1;
+            return val;
+        }
         case RSP_REGISTERS_ADDRESS::RSP_PC:
             return pc_;
         default:
@@ -174,7 +177,7 @@ void RSP::write_register(u32 address, u32 value) {
             return;
         }
         case RSP_REGISTERS_ADDRESS::RSP_SEMAPHORE:
-            semaphore_ = value & 0x00000001;
+            semaphore_ = 0;
             return;
         case RSP_REGISTERS_ADDRESS::RSP_PC:
             pc_ = value & 0x00000FFC;
@@ -246,6 +249,8 @@ void RSP::set_breakpoint()
 {
     status_.halt = 1;
     status_.broke = 1;
+    fprintf(stderr, "[RSP] BREAK at PC=0x%03X, interrupt_on_break=%u\n",
+            pc_, (unsigned)status_.interrupt_on_break);
     if (status_.interrupt_on_break) {
         mi_.set_interrupt(interfaces::MI_INTERRUPT_SP);
     }
@@ -261,7 +266,11 @@ u32 RSP::read_cop0(u32 reg) const
         case 4: return status_.raw;
         case 5: return status_.dma_full;
         case 6: return status_.dma_busy;
-        case 7: return semaphore_;
+        case 7: {
+            u32 val = semaphore_;
+            semaphore_ = 1;
+            return val;
+        }
         // RDP registers (8-15)
         case 8:  return rdp_.read_register(rdp::DPC_START);
         case 9:  return rdp_.read_register(rdp::DPC_END);

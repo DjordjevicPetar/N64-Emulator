@@ -153,12 +153,15 @@ void N64System::run()
                     (unsigned long long)(total_instructions / 1000),
                     (unsigned long long)cpu_.pc());
         } else if (total_instructions % 1000000 == 0) {
-            fprintf(stderr, "[CPU] %lluM instr, PC=0x%08llX, VI: origin=0x%X width=%u type=%u\n",
+            fprintf(stderr, "[CPU] %lluM instr, PC=0x%08llX, VI: origin=0x%X width=%u type=%u, MI: int=0x%X mask=0x%X, RSP: halt=%u\n",
                     (unsigned long long)(total_instructions / 1000000),
                     (unsigned long long)cpu_.pc(),
                     vi_.origin().origin,
                     vi_.width().width,
-                    vi_.ctrl().type);
+                    vi_.ctrl().type,
+                    mi_.interrupt_reg(),
+                    mi_.mask_reg(),
+                    (unsigned)rsp_.status().halt);
         }
 
         rsp_.process_passed_cycles(cycles);
