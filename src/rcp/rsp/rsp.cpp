@@ -192,6 +192,15 @@ void RSP::execute_next_instruction()
     if (status_.halt) {
         return;
     }
+
+    static u64 rsp_instr_since_start = 0;
+    rsp_instr_since_start++;
+    if (rsp_instr_since_start == 100000) {
+        fprintf(stderr, "[RSP] WARNING: 100K instructions without BREAK! PC=0x%03X\n", pc_);
+        fprintf(stderr, "  SU regs: r1=%08X r2=%08X r3=%08X r4=%08X r5=%08X r6=%08X\n",
+                su_.read_gpr(1), su_.read_gpr(2), su_.read_gpr(3),
+                su_.read_gpr(4), su_.read_gpr(5), su_.read_gpr(6));
+    }
     
     auto instruction = fetch_instruction();
     
@@ -204,11 +213,20 @@ void RSP::execute_next_instruction()
         instruction_entry.execute(*this, instruction);
     } else {
         static u32 rsp_ri_count = 0;
-        if (rsp_ri_count++ < 10)
+        if (rsp_ri_count++ < 10) {
             fprintf(stderr, "[RSP] Unimplemented instr=0x%08X op=%u rs=%u rt=%u funct=%u PC=0x%03X\n",
                     instruction.raw, (unsigned)instruction.i_type.opcode,
                     (unsigned)instruction.r_type.rs, (unsigned)instruction.r_type.rt,
                     (unsigned)instruction.r_type.funct, (pc_ - 4) & 0xFFF);
+            if (rsp_ri_count == 1) {
+                fprintf(stderr, "[RSP] IMEM dump around stuck point (0x060-0x0A0):\n");
+                for (u32 addr = 0x060; addr < 0x0A0; addr += 4) {
+                    u32 w = (imem_[addr] << 24) | (imem_[addr+1] << 16) |
+                            (imem_[addr+2] << 8) | imem_[addr+3];
+                    fprintf(stderr, "  [0x%03X] 0x%08X\n", addr, w);
+                }
+            }
+        }
     }
 
     if (should_branch) {
